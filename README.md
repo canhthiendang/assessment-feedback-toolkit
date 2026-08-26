@@ -5,7 +5,7 @@ An institution-neutral public toolkit created by Dr Canh Thien Dang, with develo
 1. Before assessment: an Assessment and Feedback Guide.
 2. After assessment: cohort-level General Feedback suitable for KEATS or another learning platform.
 
-Current hosted site: <https://assessment-feedback-toolkit.maian6396.chatgpt.site>
+Current hosted site: <https://assessment-feedback-documents.maian6396.chatgpt.site>
 
 ## Main workflows
 

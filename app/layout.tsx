@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://assessment-feedback-toolkit.maian6396.chatgpt.site'),
+  metadataBase: new URL('https://assessment-feedback-documents.maian6396.chatgpt.site'),
   title: 'Assessment and Feedback Toolkit',
   description: 'Create editable assessment guidance before assessment and cohort-level general feedback after assessment.',
   openGraph: {
