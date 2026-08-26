@@ -107,7 +107,7 @@ export default function Home() {
     const query = new URLSearchParams({ subject, body }); if (ccEmail.trim()) query.set('cc', ccEmail.trim()); window.location.href = `mailto:${encodeURIComponent(spoEmail.trim())}?${query}`;
   }
 
-  return <main>
+  return <main data-toolkit-version="2026.08.26">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="topbar"><div className="brand-mark" aria-hidden="true">A</div><div><p className="brand-line">Assessment and Feedback Toolkit</p><p className="brand-subline">Editable starting points for university educators</p></div><a href="#about" className="top-link">About & privacy</a></header>
     <div id="main-content">
