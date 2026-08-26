@@ -1,811 +1,133 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import {
-  assessmentLabels,
-  AssessmentType,
-  createGuideDocument,
-  GuideData,
-  triggerDownload,
-} from './docx-generator';
+import { useEffect, useMemo, useState } from 'react';
+import { aiPrompt, examplesFor } from './examples';
+import { createToolkitDocument, triggerDownload } from './docx-generator';
+import { DocumentBrand, DocumentStage, HandoverItem, ToolkitData, WorkflowMode, emptyData, formatLabels, initialHandover, profileLabels } from './types';
 
-const STORAGE_KEY = 'kbs-module-guide-draft-v1';
-const WORKFLOW_KEY = 'kbs-module-guide-workflow-v1';
-const DEFAULT_SPO_EMAIL = '';
-const DEFAULT_PD_CC = '';
-
-type WorkflowMode = '' | 'manual' | 'ai';
-
-const aiExtractionPrompt = `You are helping a university module leader prepare a concise Module Assessment and Feedback Guide.
-
-Read the syllabus or module outline I attach, together with any additional information I provide. Extract only information supported by those sources. Do not invent missing facts. Write concise, student-facing wording. Return ONLY one valid JSON object, with no markdown fences or commentary.
-
-Use exactly these keys and string values:
-{
-  "assessmentType": "exam | mixed | coursework | ",
-  "moduleCode": "",
-  "moduleTitle": "",
-  "level": "",
-  "department": "",
-  "moduleLeader": "",
-  "academicYear": "",
-  "teachingPeriod": "",
-  "syllabusName": "",
-  "sourceNotes": "",
-  "assessmentStructure": "",
-  "assessmentPurpose": "",
-  "expectations": "",
-  "criteria": "",
-  "preparation": "",
-  "workedExamples": "",
-  "commonPitfalls": "",
-  "feedbackAvailable": "",
-  "usingFeedback": "",
-  "supportRoutes": "",
-  "keatsLink": "",
-  "examFormat": "",
-  "examCoverage": "",
-  "examConditions": "",
-  "mixedRelationship": "",
-  "mixedSequence": "",
-  "courseworkMilestones": "",
-  "courseworkSubmission": ""
+const STORAGE_KEY = 'assessment-feedback-toolkit-draft-v2';
+function savedDraft() {
+  if (typeof window === 'undefined') return null;
+  try { const saved = window.localStorage.getItem(STORAGE_KEY); return saved ? JSON.parse(saved) as { data?:Partial<ToolkitData>; brand?:DocumentBrand; handover?:HandoverItem[] } : null; } catch { return null; }
 }
-
-Assessment type rules: use "exam" for 80–100% examination, "mixed" for 1–79% examination, and "coursework" for 0% examination. Leave any unsupported value as an empty string. Do not include student names, student work or identifiable student information.`;
-
-const essentialFields: Array<{ name: keyof GuideData; label: string; step: number }> = [
-  { name: 'assessmentType', label: 'Assessment profile', step: 1 },
-  { name: 'moduleCode', label: 'Module code', step: 2 },
-  { name: 'moduleTitle', label: 'Module title', step: 2 },
-  { name: 'moduleLeader', label: 'Module leader', step: 2 },
-  { name: 'assessmentStructure', label: 'Assessment structure and weighting', step: 3 },
-  { name: 'assessmentPurpose', label: 'Purpose of the assessment', step: 3 },
-  { name: 'expectations', label: 'What students are expected to demonstrate', step: 3 },
-  { name: 'criteria', label: 'How the marking criteria will be applied', step: 3 },
-  { name: 'preparation', label: 'How students should prepare', step: 3 },
-  { name: 'feedbackAvailable', label: 'Feedback students will receive', step: 3 },
-  { name: 'usingFeedback', label: 'How students should use feedback', step: 3 },
+type FieldSpec = { name: keyof ToolkitData; label: string; help?: string; required?: boolean; rows?: number };
+const commonFields: FieldSpec[] = [
+  { name: 'moduleCode', label: 'Module code', required: true }, { name: 'moduleTitle', label: 'Module title', required: true },
+  { name: 'level', label: 'Level or stage' }, { name: 'moduleLeader', label: 'Module leader', required: true },
+  { name: 'academicYear', label: 'Academic year' }, { name: 'teachingPeriod', label: 'Teaching period' },
+  { name: 'faculty', label: 'Faculty (optional)', help: 'Used for the document. It is transmitted only if you separately opt in to usage reporting.' },
+  { name: 'department', label: 'Department (optional)', help: 'Used for the document. It is transmitted only if you separately opt in to usage reporting.' },
+];
+const beforeFields: FieldSpec[] = [
+  { name: 'assessmentStructure', label: 'Assessment structure and weighting', required: true, rows: 3 },
+  { name: 'assessmentPurpose', label: 'Why is this assessment format appropriate?', required: true, rows: 5 },
+  { name: 'assessmentRequirements', label: 'Requirements, conditions and permitted resources', required: true, rows: 4 },
+  { name: 'expectations', label: 'What should students demonstrate?', required: true, rows: 5 },
+  { name: 'criteria', label: 'How will the criteria be applied?', required: true, rows: 5 },
+  { name: 'preparation', label: 'How should students prepare?', required: true, rows: 5 },
+  { name: 'workedExamples', label: 'Worked examples or practice opportunities', rows: 4 },
+  { name: 'commonPitfalls', label: 'Common pitfalls and how to avoid them', rows: 4 },
+  { name: 'feedbackAvailable', label: 'What feedback will students receive?', required: true, rows: 4 },
+  { name: 'usingFeedback', label: 'How should students use the feedback?', required: true, rows: 4 },
+  { name: 'supportRoutes', label: 'Support, Q&A or debrief routes', rows: 3 },
+  { name: 'keatsLocation', label: 'Where students can find the materials', rows: 2 },
+];
+const afterFields: FieldSpec[] = [
+  { name: 'cohortContext', label: 'Assessment and cohort context', required: true, rows: 4 },
+  { name: 'evaluatedLearning', label: 'What was the assessment designed to evaluate?', required: true, rows: 5 },
+  { name: 'performancePatterns', label: 'Overall performance patterns (optional)', help: 'Use aggregate, checked information only. Leave blank rather than estimating figures.', rows: 4 },
+  { name: 'cohortStrengths', label: 'What did the cohort generally do well?', required: true, rows: 5 },
+  { name: 'improvementAreas', label: 'Common areas for improvement', required: true, rows: 5 },
+  { name: 'criteriaApplication', label: 'How were the marking criteria applied?', required: true, rows: 5 },
+  { name: 'improvedApproaches', label: 'Illustrative improved approaches or reasoning', required: true, help: 'Use staff-created or carefully anonymised material; do not reproduce identifiable student work.', rows: 5 },
+  { name: 'futureUse', label: 'How should students use this feedback in future?', required: true, rows: 5 },
+  { name: 'debriefSupport', label: 'Further support, resources or debrief arrangements', rows: 4 },
+  { name: 'keatsLocation', label: 'Where students can find feedback and materials', rows: 2 },
 ];
 
-const recommendedFields: Array<{ name: keyof GuideData; label: string; step: number }> = [
-  { name: 'workedExamples', label: 'Worked examples or practice opportunities', step: 3 },
-  { name: 'commonPitfalls', label: 'Common pitfalls', step: 3 },
-  { name: 'supportRoutes', label: 'Support and contact routes', step: 3 },
-];
-
-const assessmentTypes: Array<{
-  id: AssessmentType;
-  eyebrow: string;
-  title: string;
-  description: string;
-  marker: string;
-}> = [
-  {
-    id: 'exam',
-    eyebrow: 'Examination-heavy',
-    title: 'Mostly examinations',
-    description: 'For modules where examinations account for most of the final mark.',
-    marker: '80–100% exam',
-  },
-  {
-    id: 'mixed',
-    eyebrow: 'Mixed assessment',
-    title: 'Exams and coursework',
-    description: 'For modules combining examinations with coursework or other assessed activity.',
-    marker: '1–79% exam',
-  },
-  {
-    id: 'coursework',
-    eyebrow: 'Coursework-only',
-    title: 'No examination',
-    description: 'For modules assessed through coursework, projects, presentations or similar work.',
-    marker: '0% exam',
-  },
-];
-
-const emptyGuide: GuideData = {
-  assessmentType: '',
-  moduleCode: '',
-  moduleTitle: '',
-  level: '',
-  department: '',
-  moduleLeader: '',
-  academicYear: '2026/27',
-  teachingPeriod: '',
-  syllabusName: '',
-  sourceNotes: '',
-  assessmentStructure: '',
-  assessmentPurpose: '',
-  expectations: '',
-  criteria: '',
-  preparation: '',
-  workedExamples: '',
-  commonPitfalls: '',
-  feedbackAvailable: '',
-  usingFeedback: '',
-  supportRoutes: '',
-  keatsLink: '',
-  examFormat: '',
-  examCoverage: '',
-  examConditions: '',
-  mixedRelationship: '',
-  mixedSequence: '',
-  courseworkMilestones: '',
-  courseworkSubmission: '',
-};
-
-const steps = ['Assessment profile', 'Module details', 'Guidance content', 'Review and share'];
-
-type InputProps = {
-  label: string;
-  name: keyof GuideData;
-  value: string;
-  onChange: (name: keyof GuideData, value: string) => void;
-  placeholder?: string;
-  hint?: string;
-  required?: boolean;
-  type?: string;
-};
-
-function InputField({ label, name, value, onChange, placeholder, hint, required, type = 'text' }: InputProps) {
-  const id = `field-${name}`;
-  return (
-    <label className="field" htmlFor={id}>
-      <span>{label}{required && <b aria-hidden="true"> *</b>}</span>
-      <input
-        id={id}
-        name={name}
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        required={required}
-        onChange={(event) => onChange(name, event.target.value)}
-      />
-      {hint && <small>{hint}</small>}
-    </label>
-  );
+function CopyButton({ text, label = 'Copy' }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+  return <button type="button" className="copy-button" onClick={copy} aria-live="polite">{copied ? 'Copied' : label}</button>;
 }
 
-type TextAreaProps = InputProps & { rows?: number };
-
-function TextAreaField({ label, name, value, onChange, placeholder, hint, required, rows = 4 }: TextAreaProps) {
-  const id = `field-${name}`;
-  return (
-    <label className="field field-wide" htmlFor={id}>
-      <span>{label}{required && <b aria-hidden="true"> *</b>}</span>
-      <textarea
-        id={id}
-        name={name}
-        value={value}
-        placeholder={placeholder}
-        required={required}
-        rows={rows}
-        onChange={(event) => onChange(name, event.target.value)}
-      />
-      {hint && <small>{hint}</small>}
-    </label>
-  );
+function Field({ spec, value, onChange, examples, showError = false }: { spec: FieldSpec; value: string; onChange: (value: string) => void; examples?: string[]; showError?: boolean }) {
+  const id = `field-${spec.name}`; const errorId = `${id}-error`; const invalid = Boolean(showError && spec.required && !value.trim());
+  return <div className={`field ${spec.rows ? 'field-wide' : ''}`}>
+    <label htmlFor={id}>{spec.label}{spec.required && <span className="required"> (required)</span>}</label>
+    {spec.rows ? <textarea id={id} value={value} rows={spec.rows} onChange={(e) => onChange(e.target.value)} aria-describedby={`${spec.help ? `${id}-help ` : ''}${invalid ? errorId : ''}`.trim() || undefined} />
+      : <input id={id} value={value} onChange={(e) => onChange(e.target.value)} aria-describedby={`${spec.help ? `${id}-help ` : ''}${invalid ? errorId : ''}`.trim() || undefined} />}
+    {spec.help && <p className="field-help" id={`${id}-help`}>{spec.help}</p>}
+    {invalid && <p className="field-error" id={errorId}>Complete this field before downloading.</p>}
+    {examples?.length ? <details className="examples"><summary>Show examples</summary><p className="example-note">Editable suggestions—not mandatory policy wording. Check and adapt them for your module.</p>{examples.map((example, index) => <div className="example-card" key={index}><p>{example}</p><div><CopyButton text={example} /><button type="button" className="use-button" onClick={() => onChange(value.trim() ? `${value.trim()}\n\n${example}` : example)}>Use in field</button></div></div>)}</details> : null}
+  </div>;
 }
 
-function PreviewItem({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="preview-item">
-      <dt>{label}</dt>
-      <dd>{value.trim() || 'Not yet supplied'}</dd>
-    </div>
-  );
-}
-
-function missingFrom(fields: Array<{ name: keyof GuideData; label: string; step: number }>, data: GuideData) {
-  return fields.filter(({ name }) => !String(data[name] || '').trim());
-}
-
-function profileRecommendedFields(data: GuideData) {
-  if (data.assessmentType === 'exam') {
-    return [
-      ...recommendedFields,
-      { name: 'examFormat' as const, label: 'Examination format and duration', step: 3 },
-      { name: 'examCoverage' as const, label: 'Examination coverage', step: 3 },
-      { name: 'examConditions' as const, label: 'Examination conditions and permitted materials', step: 3 },
-    ];
-  }
-  if (data.assessmentType === 'mixed') {
-    return [
-      ...recommendedFields,
-      { name: 'mixedRelationship' as const, label: 'Relationship between assessment components', step: 3 },
-      { name: 'mixedSequence' as const, label: 'Sequencing across assessment components', step: 3 },
-    ];
-  }
-  if (data.assessmentType === 'coursework') {
-    return [
-      ...recommendedFields,
-      { name: 'courseworkMilestones' as const, label: 'Coursework milestones and formative opportunities', step: 3 },
-      { name: 'courseworkSubmission' as const, label: 'Coursework submission requirements', step: 3 },
-    ];
-  }
-  return recommendedFields;
-}
-
-function parseAiGuide(raw: string): Partial<GuideData> {
+function parseAi(raw: string): Partial<ToolkitData> {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-  const start = cleaned.indexOf('{');
-  const end = cleaned.lastIndexOf('}');
-  if (start < 0 || end <= start) throw new Error('No JSON object was found.');
+  const start = cleaned.indexOf('{'); const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('No valid JSON object was found. Copy the complete ChatGPT response and try again.');
   const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
-  const allowed = new Set(Object.keys(emptyGuide));
-  const result: Partial<GuideData> = {};
-
-  for (const [key, value] of Object.entries(parsed)) {
-    if (!allowed.has(key) || typeof value !== 'string') continue;
-    if (key === 'assessmentType' && value && !['exam', 'mixed', 'coursework'].includes(value)) continue;
-    (result as Record<string, string>)[key] = value.trim();
-  }
-
-  if (!Object.keys(result).length) throw new Error('The response did not contain any recognised guide fields.');
+  const allowed = new Set(Object.keys(emptyData)); const result: Partial<ToolkitData> = {};
+  for (const [key, value] of Object.entries(parsed)) if (allowed.has(key) && typeof value === 'string') (result as Record<string, string>)[key] = value;
   return result;
 }
 
 export default function Home() {
-  const [workflow, setWorkflow] = useState<WorkflowMode>('');
-  const [step, setStep] = useState(1);
-  const [data, setData] = useState<GuideData>(emptyGuide);
-  const [ready, setReady] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
-  const [spoEmail, setSpoEmail] = useState(DEFAULT_SPO_EMAIL);
-  const [pdCc, setPdCc] = useState(DEFAULT_PD_CC);
-  const [error, setError] = useState('');
-  const [status, setStatus] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [aiImported, setAiImported] = useState(false);
+  const [stage, setStage] = useState<DocumentStage | ''>(''); const [workflow, setWorkflow] = useState<WorkflowMode | ''>('');
+  const [brand, setBrand] = useState<DocumentBrand>(() => savedDraft()?.brand || 'generic'); const [data, setData] = useState<ToolkitData>(() => ({ ...emptyData, ...(savedDraft()?.data || {}) }));
+  const [aiResult, setAiResult] = useState(''); const [status, setStatus] = useState(''); const [showReview, setShowReview] = useState(false);
+  const [handover, setHandover] = useState<HandoverItem[]>(() => savedDraft()?.handover || initialHandover); const [spoEmail, setSpoEmail] = useState(''); const [ccEmail, setCcEmail] = useState('');
+  const [consent, setConsent] = useState(false); const [confirmed, setConfirmed] = useState(false);
+  const examples = useMemo(() => stage ? examplesFor(stage, data.assessmentFormat) : {}, [stage, data.assessmentFormat]);
+  const fields = stage === 'before' ? beforeFields : afterFields;
+  const requiredSpecs: FieldSpec[] = [...commonFields, ...fields, { name:'assessmentProfile', label:'Broad assessment profile', required:true }, { name:'assessmentFormat', label:'Main assessment format', required:true }];
+  const missing = requiredSpecs.filter(f => f.required && !String(data[f.name] || '').trim());
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) setData({ ...emptyGuide, ...JSON.parse(stored) });
-      const storedWorkflow = window.localStorage.getItem(WORKFLOW_KEY);
-      if (storedWorkflow === 'manual' || storedWorkflow === 'ai') setWorkflow(storedWorkflow);
-    } catch {
-      // A damaged local draft should never prevent the form from opening.
-    }
-    setReady(true);
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  }, [data, ready]);
-
-  useEffect(() => {
-    if (!ready || !workflow) return;
-    window.localStorage.setItem(WORKFLOW_KEY, workflow);
-  }, [workflow, ready]);
-
-  const selectedProfile = useMemo(
-    () => assessmentTypes.find((type) => type.id === data.assessmentType),
-    [data.assessmentType],
-  );
-
-  const essentialMissing = useMemo(() => missingFrom(essentialFields, data), [data]);
-  const recommendedMissing = useMemo(() => missingFrom(profileRecommendedFields(data), data), [data]);
-
-  function updateField(name: keyof GuideData, value: string) {
-    setData((current) => ({ ...current, [name]: value }));
-    setError('');
-    setStatus('');
-  }
-
-  function selectProfile(type: AssessmentType) {
-    updateField('assessmentType', type);
-  }
-
-  function chooseWorkflow(mode: Exclude<WorkflowMode, ''>) {
-    setWorkflow(mode);
-    setError('');
-    setStatus(mode === 'ai'
-      ? 'AI-assisted route selected. Use the three steps below to start from your syllabus.'
-      : 'Manual route selected. Your entries and selected filename remain on this device.');
-  }
-
-  async function copyAiPrompt() {
-    try {
-      await navigator.clipboard.writeText(aiExtractionPrompt);
-      setStatus('Extraction instructions copied. Open ChatGPT, attach the syllabus, paste the instructions and add any extra information.');
-      setError('');
-    } catch {
-      setError('Your browser could not copy automatically. Select and copy the instructions shown below.');
-    }
-  }
-
-  function importAiResponse() {
-    if (!aiResponse.trim()) {
-      setError('Paste the structured response from ChatGPT first.');
-      return;
-    }
-    try {
-      const imported = parseAiGuide(aiResponse);
-      const merged = { ...data, ...imported } as GuideData;
-      const remaining = missingFrom(essentialFields, merged);
-      setData(merged);
-      setAiImported(true);
-      setConfirmed(false);
-      setStep(remaining[0]?.step || 4);
-      setError('');
-      setStatus(remaining.length
-        ? `Imported the syllabus information. Only ${remaining.length} essential ${remaining.length === 1 ? 'item remains' : 'items remain'} for you to complete.`
-        : 'Imported the syllabus information. All essential fields are complete; please review them before downloading.');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch {
-      setError('I could not read that response. Ask ChatGPT to return only the JSON object, then copy the complete response again.');
-    }
-  }
-
-  function validateCurrentStep() {
-    if (step === 1 && !data.assessmentType) return 'Choose one assessment profile to continue.';
-    if (step === 2) {
-      if (!data.moduleCode.trim() || !data.moduleTitle.trim() || !data.moduleLeader.trim()) {
-        return 'Add the module code, module title and module leader to continue.';
-      }
-    }
-    if (step === 3) {
-      const required = [
-        data.assessmentStructure,
-        data.assessmentPurpose,
-        data.expectations,
-        data.criteria,
-        data.preparation,
-        data.feedbackAvailable,
-        data.usingFeedback,
-      ];
-      if (required.some((value) => !value.trim())) {
-        return 'Complete the required guidance fields before reviewing the guide.';
-      }
-    }
-    return '';
-  }
-
-  function nextStep() {
-    const message = validateCurrentStep();
-    if (message) {
-      setError(message);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-    setStep((current) => Math.min(4, current + 1));
-    setError('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function previousStep() {
-    setStep((current) => Math.max(1, current - 1));
-    setError('');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function onSyllabus(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    updateField('syllabusName', file?.name || '');
-  }
-
-  async function downloadGuide(showStatus = true) {
-    if (!confirmed) {
-      setError('Confirm that you have checked the information before downloading the guide.');
-      return null;
-    }
+  useEffect(() => { const timer = setTimeout(() => localStorage.setItem(STORAGE_KEY, JSON.stringify({ data, brand, handover })), 250); return () => clearTimeout(timer); }, [data, brand, handover]);
+  function update(name: keyof ToolkitData, value: string) { setData(current => ({ ...current, [name]: value })); setStatus(''); }
+  function chooseStage(next: DocumentStage) { setStage(next); setWorkflow(''); setShowReview(false); setStatus(''); window.setTimeout(() => document.getElementById('route-heading')?.focus(), 20); }
+  function importAi() { try { const values = parseAi(aiResult); setData(current => ({ ...current, ...values })); setStatus(`Draft imported. ${Object.values(values).filter(Boolean).length} fields were filled; review every field and complete any gaps.`); } catch (error) { setStatus(error instanceof Error ? error.message : 'The response could not be imported.'); } }
+  async function download() {
+    setShowReview(true); if (missing.length || !confirmed) { setStatus(missing.length ? `Complete ${missing.length} required field${missing.length === 1 ? '' : 's'} before downloading.` : 'Confirm the final review statement before downloading.'); document.getElementById('review')?.scrollIntoView({ behavior: 'smooth' }); return; }
     setStatus('Creating your editable Word document…');
-    const result = await createGuideDocument(data);
-    triggerDownload(result.blob, result.filename);
-    if (showStatus) setStatus(`Downloaded ${result.filename}`);
-    return result.filename;
+    try {
+      const logo = brand === 'kcl' ? await fetch('/kcl-logo.png').then(r => { if (!r.ok) throw new Error('The KCL logo could not be loaded.'); return r.arrayBuffer(); }) : undefined;
+      const result = await createToolkitDocument(data, stage as DocumentStage, brand, logo); triggerDownload(result.blob, result.filename);
+      setStatus(`Downloaded ${result.filename}. Nothing has been published automatically.`);
+      if (consent) fetch('/api/usage', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ consent:true, faculty: data.faculty.trim(), department: data.department.trim(), stage, workflow, assessmentProfile: data.assessmentProfile, assessmentFormat: data.assessmentFormat, academicPeriod: data.academicYear }) }).catch(() => undefined);
+    } catch (error) { setStatus(error instanceof Error ? error.message : 'The document could not be created.'); }
+  }
+  function updateHandover(id: string, key: 'status' | 'url', value: string) { setHandover(items => items.map(item => item.id === id ? { ...item, [key]: value } : item) as HandoverItem[]); }
+  function openEmail() {
+    if (!spoEmail.trim()) { setStatus('Enter the SPO email address first.'); return; }
+    const selected = handover.filter(item => item.status !== 'na').map(item => `- ${item.label}: ${item.status === 'included' ? 'included' : item.status === 'link' ? `link provided${item.url ? ` (${item.url})` : ''}` : 'to follow'}`).join('\n');
+    const subject = `${data.moduleCode || data.moduleTitle}: materials for KEATS/programme page`;
+    const body = `Dear SPO,\n\nPlease upload or link the approved materials below on the relevant KEATS or programme page.\n\n${selected}\n\nPlease confirm the page location, or let me know if a different location is required. I will attach the downloaded files before sending this email.\n\nBest wishes,\n${data.moduleLeader}`;
+    const query = new URLSearchParams({ subject, body }); if (ccEmail.trim()) query.set('cc', ccEmail.trim()); window.location.href = `mailto:${encodeURIComponent(spoEmail.trim())}?${query}`;
   }
 
-  async function prepareEmail() {
-    const recipient = spoEmail.trim();
-    if (!/^\S+@\S+\.\S+$/.test(recipient)) {
-      setError('Enter the approved SPO email address before preparing the email.');
-      return;
-    }
-    if (pdCc.trim() && !/^\S+@\S+\.\S+$/.test(pdCc.trim())) {
-      setError('Check the optional Programme Director CC email address.');
-      return;
-    }
-    const filename = await downloadGuide(false);
-    if (!filename) return;
-    const subject = `${data.moduleCode} ${data.moduleTitle} – Assessment and Feedback Guide`.trim();
-    const body = [
-      'Dear colleague,',
-      '',
-      `Please find the completed assessment and feedback guide for ${data.moduleCode} ${data.moduleTitle}.`,
-      '',
-      `Please attach the downloaded file before sending: ${filename}`,
-      '',
-      'Best wishes,',
-      data.moduleLeader,
-    ].join('\n');
-    const query = new URLSearchParams({ subject, body });
-    if (pdCc.trim()) query.set('cc', pdCc.trim());
-    setStatus('The editable guide has downloaded. Your email application is opening—attach the downloaded file before sending.');
-    window.location.href = `mailto:${encodeURIComponent(recipient)}?${query.toString()}`;
-  }
+  return <main>
+    <a className="skip-link" href="#main-content">Skip to main content</a>
+    <header className="topbar"><div className="brand-mark" aria-hidden="true">A</div><div><p className="brand-line">Assessment and Feedback Toolkit</p><p className="brand-subline">Editable starting points for university educators</p></div><a href="#about" className="top-link">About & privacy</a></header>
+    <div id="main-content">
+      <section className="hero"><div><p className="kicker">Before and after assessment</p><h1>Make assessment clearer and feedback more useful</h1><p className="lede">Create an editable guide before assessment or cohort-level general feedback after assessment. Start with copyable examples, use your own ChatGPT account, or complete a structured form manually.</p><div className="hero-points"><span>Fully editable Word output</span><span>Nothing published automatically</span><span>Your academic judgement remains central</span></div></div><aside className="time-card" aria-label="Indicative completion times"><strong>Designed to save time</strong><p>AI-assisted guide: about 5–10 minutes</p><p>Manual guide: about 10–20 minutes</p><p>General feedback: about 10–15 minutes once themes are ready</p><small>Pilot estimates only; actual time will vary.</small></aside></section>
+      <section className="intro-card"><p><strong>Examples are available throughout.</strong> Open “Show examples” beneath a prompt, copy a suggestion, and adapt it instead of starting from a blank page.</p><div className="details-grid"><details><summary>Why this is useful</summary><p>Help students understand why they are assessed, what good performance looks like, how to prepare, what feedback means and how to improve.</p></details><details><summary>What remains under your control</summary><p>Every document is editable. Nothing is sent to students or KEATS automatically. The module leader owns, checks and approves the final content.</p></details><details><summary>How is my information used?</summary><p>Manual form entries stay in this browser. In the AI route, material is shared directly with your own ChatGPT account—not with this site. Optional usage reporting sends only the clearly listed aggregate fields after a successful download.</p></details><details id="about"><summary>About this resource</summary><p>Created by Dr Canh Thien Dang, with development assistance from ChatGPT by OpenAI. Initially designed to support colleagues at King’s College London; colleagues at other universities may use and adapt it, subject to local policies.</p></details></div></section>
 
-  function resetForm() {
-    if (!window.confirm('Clear this module guide and start again?')) return;
-    window.localStorage.removeItem(STORAGE_KEY);
-    setData(emptyGuide);
-    setConfirmed(false);
-    setStep(1);
-    setError('');
-    setStatus('Draft cleared.');
-  }
+      <section className="chooser" aria-labelledby="stage-heading"><p className="section-label">1 · Choose the moment</p><h2 id="stage-heading">What would you like to create?</h2><div className="stage-grid"><button type="button" className={stage === 'before' ? 'stage-card selected' : 'stage-card'} onClick={() => chooseStage('before')}><span>Before the assessment</span><strong>Assessment and Feedback Guide</strong><p>Clarify purpose, expectations, criteria, preparation, requirements and feedback routes.</p></button><button type="button" className={stage === 'after' ? 'stage-card selected' : 'stage-card'} onClick={() => chooseStage('after')}><span>After the assessment</span><strong>General Feedback for KEATS</strong><p>Explain cohort strengths, improvements, criteria and practical next steps without identifiable student information.</p></button></div></section>
 
-  return (
-    <main>
-      <header className="topbar">
-        <div className="brand-mark" aria-hidden="true">K</div>
-        <div>
-          <p className="brand-line">King’s Business School</p>
-          <p className="brand-subline">Programme enhancement toolkit</p>
-        </div>
-        <span className={`privacy-pill ${workflow === 'ai' ? 'ai-active' : ''}`}>
-          {workflow === 'ai' ? 'ChatGPT-assisted route' : workflow === 'manual' ? 'Manual route · local draft' : 'Manual or AI-assisted'}
-        </span>
-      </header>
+      {stage && <section className="tool-card" aria-labelledby="route-heading"><p className="section-label">2 · Choose how to start</p><h2 id="route-heading" tabIndex={-1}>Use ChatGPT or complete it manually</h2><div className="route-grid"><button type="button" className={workflow === 'ai' ? 'route-card selected' : 'route-card'} onClick={() => setWorkflow('ai')}><strong>ChatGPT-assisted</strong><p>Copy a careful extraction prompt, work in your own ChatGPT account, then paste the structured draft back here.</p><small>Free ChatGPT accounts can use the prompt; availability of file upload features may vary.</small></button><button type="button" className={workflow === 'manual' ? 'route-card selected' : 'route-card'} onClick={() => setWorkflow('manual')}><strong>Manual</strong><p>Complete a concise structured template with expandable, copyable examples.</p><small>Your entries remain in this browser unless you opt in to a limited usage event.</small></button></div>
+      {workflow && <>
+        <div className="safety-banner"><strong>Keep student information out.</strong> Do not enter or upload names, IDs, individual scripts, raw marks, named comments or identifiable student work. For general feedback, use anonymised aggregate themes only.</div>
+        {workflow === 'ai' && <section className="ai-panel"><h3>Prepare a first draft in your own ChatGPT</h3><ol><li>Copy the prompt below.</li><li>Open ChatGPT and provide your syllabus or assessment materials. For post-assessment feedback, use only approved documents and anonymised aggregate themes.</li><li>Paste ChatGPT’s JSON response below and import it.</li></ol><div className="prompt-box"><pre tabIndex={0} aria-label="Scrollable ChatGPT prompt">{aiPrompt(stage, data.assessmentFormat)}</pre><CopyButton text={aiPrompt(stage, data.assessmentFormat)} label="Copy AI prompt" /></div><a className="external-link" href="https://chatgpt.com/" target="_blank" rel="noreferrer">Open ChatGPT in a new tab</a><label className="field field-wide" htmlFor="ai-result"><span>Paste the JSON response</span><textarea id="ai-result" rows={8} value={aiResult} onChange={e => setAiResult(e.target.value)} /></label><button type="button" className="secondary-button" onClick={importAi}>Import the draft</button></section>}
+        <section className="form-section"><p className="section-label">3 · Module and assessment</p><h2>Check the basic details</h2><div className="form-grid">{commonFields.map(spec => <Field key={spec.name} spec={spec} value={String(data[spec.name] || '')} onChange={value => update(spec.name, value)} showError={showReview} />)}<div className="field"><label htmlFor="field-assessmentProfile">Broad assessment profile <span className="required">(required)</span></label><select id="field-assessmentProfile" value={data.assessmentProfile} onChange={e => update('assessmentProfile', e.target.value)} aria-describedby={showReview && !data.assessmentProfile ? 'assessment-profile-error' : undefined}><option value="">Select one</option>{Object.entries(profileLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>{showReview && !data.assessmentProfile && <p className="field-error" id="assessment-profile-error">Select the examination-heavy, mixed-assessment or coursework-only profile.</p>}</div><div className="field"><label htmlFor="field-assessmentFormat">Main assessment format <span className="required">(required)</span></label><select id="field-assessmentFormat" value={data.assessmentFormat} onChange={e => update('assessmentFormat', e.target.value)} aria-describedby={showReview && !data.assessmentFormat ? 'assessment-format-error' : undefined}><option value="">Select one</option>{Object.entries(formatLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select>{showReview && !data.assessmentFormat && <p className="field-error" id="assessment-format-error">Select the closest format; you can describe combinations in the document.</p>}</div></div></section>
+        <section className="form-section"><p className="section-label">4 · Student-facing content</p><h2>{stage === 'before' ? 'Clarify expectations and preparation' : 'Make cohort feedback useful'}</h2><p className="section-intro">Examples change with your document stage and assessment format. They are editable suggestions, not institutional policy.</p><div className="form-grid">{fields.map(spec => <Field key={spec.name} spec={spec} value={String(data[spec.name] || '')} onChange={value => update(spec.name, value)} examples={examples[spec.name]} showError={showReview} />)}</div></section>
+        <section className="form-section"><p className="section-label">5 · Document style</p><h2>Choose the output branding</h2><div className="brand-choice"><label><input type="radio" name="brand" checked={brand === 'generic'} onChange={() => setBrand('generic')} /> Generic, institution-neutral document</label><label><input type="radio" name="brand" checked={brand === 'kcl'} onChange={() => setBrand('kcl')} /> King’s College London document with KCL logo and red styling</label></div><p className="field-help">Select KCL only when the document is for authorised KCL use. The public website remains institution-neutral.</p></section>
+        <section className="form-section" id="review"><p className="section-label">6 · Review and download</p><h2>Keep ownership of the final document</h2>{showReview && missing.length > 0 && <div className="error-summary" role="alert"><strong>{missing.length} required field{missing.length === 1 ? '' : 's'} still need attention:</strong><ul>{missing.map(field => <li key={field.name}><a href={`#field-${field.name}`}>{field.label}</a></li>)}</ul></div>}<label className="confirm"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} /> <span>I have checked the content for accuracy, current requirements, accessibility and suitability for students. I understand that nothing is published automatically.</span></label><details className="privacy-consent"><summary>Optional: help Dr Canh Thien Dang report aggregate toolkit use</summary><p>If you opt in, one document-generation event will send: faculty, department, document type, manual/AI route, broad assessment profile, assessment format, academic period and event date. It will not send your name, email, module details, form responses, syllabus, feedback, document, ChatGPT content, student information, raw marks or a persistent user identifier.</p><label><input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} /> I consent to sending those limited fields after a successful download.</label><p className="field-help">Declining does not affect the tool. Counts represent generation events, not unique colleagues. Records are retained for up to 24 months; reporting suppresses cells with fewer than five events. Collection remains subject to any required institutional privacy or IT approval.</p>{consent && <div className="consent-review"><strong>Fields to be sent</strong><p>Faculty: {data.faculty || 'Not supplied'} · Department: {data.department || 'Not supplied'} · Type: {stage === 'before' ? 'pre-assessment guide' : 'post-assessment feedback'} · Route: {workflow} · Profile: {data.assessmentProfile || 'Not selected'} · Format: {data.assessmentFormat ? formatLabels[data.assessmentFormat] : 'Not selected'} · Period: {data.academicYear || 'Not supplied'}</p></div>}</details><button type="button" className="primary-button" onClick={download}>Download editable Word document</button><p className="status" role="status" aria-live="polite">{status}</p></section>
 
-      <section className="hero compact-hero">
-        <div className="hero-copy">
-          <p className="kicker">Module guide generator</p>
-          <h1>Create a clear assessment and feedback guide</h1>
-          <p className="lede">
-            Start from your syllabus with ChatGPT, or complete the guide manually. Check the result and download an editable Word document.
-          </p>
-        </div>
-        {workflow ? (
-          <div className="step-indicator" aria-label={`Step ${step} of 4`}>
-            <span>Step {step} of 4</span>
-            <div className="progress-track"><span style={{ width: `${step * 25}%` }} /></div>
-            <strong>{steps[step - 1]}</strong>
-          </div>
-        ) : (
-          <div className="step-indicator route-summary">
-            <span>Choose your route</span>
-            <strong>AI-assisted or manual</strong>
-            <small>You can switch routes without losing your draft.</small>
-          </div>
-        )}
-      </section>
-
-      {!workflow ? (
-        <section className="route-picker" aria-labelledby="route-heading">
-          <div className="section-heading">
-            <div>
-              <p className="section-number">START HERE</p>
-              <h2 id="route-heading">How would you like to complete the guide?</h2>
-            </div>
-            <p>Both routes produce the same editable Word document.</p>
-          </div>
-          <div className="route-grid">
-            <button type="button" className="route-card recommended" onClick={() => chooseWorkflow('ai')}>
-              <span className="route-badge">Recommended</span>
-              <strong>Start from my syllabus with ChatGPT</strong>
-              <p>Use your own ChatGPT account to extract the available information. Return here and complete only what is missing.</p>
-              <span className="route-action">Choose AI-assisted route <i>→</i></span>
-            </button>
-            <button type="button" className="route-card" onClick={() => chooseWorkflow('manual')}>
-              <span className="route-badge neutral">No AI</span>
-              <strong>Complete the form manually</strong>
-              <p>Use the existing structured form. Your entries and selected filename remain in this browser.</p>
-              <span className="route-action">Choose manual route <i>→</i></span>
-            </button>
-          </div>
-          <p className="safety-line">Do not upload student work or identifiable student information in either route.</p>
-        </section>
-      ) : <>
-
-      <div className="workflow-strip">
-        <div>
-          <span>{workflow === 'ai' ? 'AI-assisted route' : 'Manual route'}</span>
-          <strong>{workflow === 'ai' ? 'Start with ChatGPT, then review here' : 'Complete the structured form yourself'}</strong>
-        </div>
-        <button type="button" onClick={() => { setWorkflow(''); setError(''); setStatus(''); }}>Change route</button>
-      </div>
-
-      {workflow === 'ai' && (
-        <section className="ai-assist" aria-labelledby="ai-assist-heading">
-          <div className="ai-assist-heading">
-            <div>
-              <p className="section-number">AI ASSISTANT</p>
-              <h2 id="ai-assist-heading">Let ChatGPT prepare the first draft</h2>
-            </div>
-            <p>ChatGPT does the extraction; this site checks what is still missing.</p>
-          </div>
-
-          <ol className="ai-steps">
-            <li><span>1</span><div><strong>Copy the extraction instructions</strong><small>They tell ChatGPT not to invent missing information.</small></div></li>
-            <li><span>2</span><div><strong>Open ChatGPT and attach your syllabus</strong><small>Paste the instructions and add any other module information you wish.</small></div></li>
-            <li><span>3</span><div><strong>Paste ChatGPT’s response below</strong><small>The form will fill itself and identify only the remaining questions.</small></div></li>
-          </ol>
-
-          <div className="ai-actions">
-            <button type="button" className="primary-button" onClick={() => void copyAiPrompt()}>Copy extraction instructions</button>
-            <a className="secondary-button link-button" href="https://chatgpt.com/" target="_blank" rel="noreferrer">Open ChatGPT</a>
-          </div>
-
-          <details className="prompt-details">
-            <summary>View or manually copy the extraction instructions</summary>
-            <textarea readOnly value={aiExtractionPrompt} rows={10} aria-label="ChatGPT extraction instructions" />
-          </details>
-
-          <label className="ai-response" htmlFor="ai-response">
-            <span>Paste ChatGPT’s structured response</span>
-            <textarea
-              id="ai-response"
-              value={aiResponse}
-              onChange={(event) => setAiResponse(event.target.value)}
-              rows={8}
-              placeholder={'Paste the complete JSON response here, beginning with { and ending with }'}
-            />
-          </label>
-          <button type="button" className="import-button" onClick={importAiResponse}>Fill the form and check what is missing</button>
-
-          {aiImported && (
-            <div className="missing-review" aria-live="polite">
-              <div>
-                <strong>{essentialMissing.length ? `${essentialMissing.length} essential ${essentialMissing.length === 1 ? 'item' : 'items'} still needed` : 'All essential information is present'}</strong>
-                <p>{essentialMissing.length ? 'The form will take you directly to these questions.' : 'Review the imported wording and edit anything that needs refinement.'}</p>
-              </div>
-              {essentialMissing.length > 0 && <ul>{essentialMissing.map((item) => <li key={item.name}>{item.label}</li>)}</ul>}
-              {recommendedMissing.length > 0 && (
-                <details>
-                  <summary>{recommendedMissing.length} optional refinements are still blank</summary>
-                  <ul>{recommendedMissing.map((item) => <li key={item.name}>{item.label}</li>)}</ul>
-                </details>
-              )}
-            </div>
-          )}
-
-          <p className="ai-privacy"><strong>Privacy:</strong> the syllabus is uploaded to your own ChatGPT conversation, not to this website. ChatGPT Free accounts support file uploads subject to their current usage limits. Check your account’s data controls before using work documents.</p>
-        </section>
-      )}
-
-      <nav className="step-nav" aria-label="Form progress">
-        {steps.map((label, index) => {
-          const number = index + 1;
-          return (
-            <button
-              key={label}
-              type="button"
-              className={number === step ? 'active' : number < step ? 'complete' : ''}
-              onClick={() => number < step && setStep(number)}
-              disabled={number > step}
-            >
-              <span>{number < step ? '✓' : number}</span>{label}
-            </button>
-          );
-        })}
-      </nav>
-
-      {error && <div className="message error-message" role="alert">{error}</div>}
-      {status && <div className="message status-message" role="status">{status}</div>}
-
-      <form className="workspace" onSubmit={(event) => event.preventDefault()}>
-        {step === 1 && (
-          <section aria-labelledby="assessment-heading">
-            <div className="section-heading">
-              <div>
-                <p className="section-number">01</p>
-                <h2 id="assessment-heading">How is this module assessed?</h2>
-              </div>
-              <p>Select the closest profile. Later prompts will adapt to this choice.</p>
-            </div>
-
-            <div className="assessment-grid">
-              {assessmentTypes.map((type) => (
-                <button
-                  className={`assessment-card ${data.assessmentType === type.id ? 'selected' : ''}`}
-                  key={type.id}
-                  type="button"
-                  onClick={() => selectProfile(type.id)}
-                  aria-pressed={data.assessmentType === type.id}
-                >
-                  <span className="card-topline"><span>{type.eyebrow}</span><b>{type.marker}</b></span>
-                  <strong>{type.title}</strong>
-                  <small>{type.description}</small>
-                  <span className="select-line">{data.assessmentType === type.id ? 'Selected' : 'Choose this profile'} <i>→</i></span>
-                </button>
-              ))}
-            </div>
-
-            <div className="local-note">
-              <span aria-hidden="true">✓</span>
-              {workflow === 'manual' ? (
-                <p><strong>Your information stays on this device.</strong> The manual route does not upload syllabi or responses to a server.</p>
-              ) : (
-                <p><strong>ChatGPT supplied the first draft.</strong> Review the assessment profile and correct it if the syllabus was ambiguous.</p>
-              )}
-            </div>
-          </section>
-        )}
-
-        {step === 2 && (
-          <section aria-labelledby="details-heading">
-            <div className="section-heading">
-              <div>
-                <p className="section-number">02</p>
-                <h2 id="details-heading">Module details</h2>
-              </div>
-              <p>These fields identify the guide and appear at the beginning of the Word document.</p>
-            </div>
-
-            <div className="form-grid">
-              <InputField label="Module code" name="moduleCode" value={data.moduleCode} onChange={updateField} placeholder="e.g. 5SSMN225" required />
-              <InputField label="Module title" name="moduleTitle" value={data.moduleTitle} onChange={updateField} placeholder="e.g. Intermediate Econometrics" required />
-              <label className="field" htmlFor="field-level">
-                <span>Level</span>
-                <select id="field-level" value={data.level} onChange={(event) => updateField('level', event.target.value)}>
-                  <option value="">Select level</option>
-                  <option>Level 4</option><option>Level 5</option><option>Level 6</option><option>Level 7</option>
-                </select>
-              </label>
-              <InputField label="Department" name="department" value={data.department} onChange={updateField} placeholder="e.g. Economics" />
-              <InputField label="Module leader" name="moduleLeader" value={data.moduleLeader} onChange={updateField} placeholder="Full name" required />
-              <InputField label="Academic year" name="academicYear" value={data.academicYear} onChange={updateField} placeholder="2026/27" />
-              <InputField label="Teaching period" name="teachingPeriod" value={data.teachingPeriod} onChange={updateField} placeholder="e.g. Semester 1" />
-              <div className="field upload-field">
-                <span>Module syllabus or outline</span>
-                <label className="upload-control" htmlFor="syllabus-upload">
-                  <b>{data.syllabusName ? 'Replace file' : 'Choose PDF or Word file'}</b>
-                  <small>{data.syllabusName || 'No file selected'}</small>
-                </label>
-                <input id="syllabus-upload" className="visually-hidden" type="file" accept=".pdf,.doc,.docx" onChange={onSyllabus} />
-                <small>{workflow === 'ai' ? 'This selector records the filename only. Attach the actual syllabus in your ChatGPT conversation.' : 'The file remains on your device and is not read automatically.'}</small>
-              </div>
-              <TextAreaField
-                label="Additional source information"
-                name="sourceNotes"
-                value={data.sourceNotes}
-                onChange={updateField}
-                placeholder="Paste any relevant information that is not already captured below."
-                rows={4}
-              />
-            </div>
-          </section>
-        )}
-
-        {step === 3 && (
-          <section aria-labelledby="guidance-heading">
-            <div className="section-heading">
-              <div>
-                <p className="section-number">03</p>
-                <h2 id="guidance-heading">Guidance content</h2>
-              </div>
-              <p>You selected <strong>{selectedProfile?.eyebrow}</strong>. Write for students and use plain, specific language.</p>
-            </div>
-
-            <div className="profile-banner">
-              <span>{selectedProfile?.marker}</span>
-              <div><strong>{selectedProfile?.title}</strong><small>{selectedProfile?.description}</small></div>
-              <button type="button" onClick={() => setStep(1)}>Change</button>
-            </div>
-
-            <fieldset>
-              <legend>Assessment overview</legend>
-              <div className="form-grid">
-                <TextAreaField label="Assessment structure and weighting" name="assessmentStructure" value={data.assessmentStructure} onChange={updateField} placeholder="List the assessment components, format and weighting." required />
-                <TextAreaField label="Purpose of the assessment" name="assessmentPurpose" value={data.assessmentPurpose} onChange={updateField} placeholder="Explain what the assessment is designed to test and why." required />
-
-                {data.assessmentType === 'exam' && <>
-                  <TextAreaField label="Examination format and duration" name="examFormat" value={data.examFormat} onChange={updateField} placeholder="e.g. Two-hour closed-book examination; section structure and question choice." />
-                  <TextAreaField label="Coverage and relationship to teaching" name="examCoverage" value={data.examCoverage} onChange={updateField} placeholder="Clarify examinable material and how lectures/tutorials support preparation." />
-                  <TextAreaField label="Conditions and permitted materials" name="examConditions" value={data.examConditions} onChange={updateField} placeholder="State calculator, formula sheet, reference or other conditions." />
-                </>}
-
-                {data.assessmentType === 'mixed' && <>
-                  <TextAreaField label="Relationship between components" name="mixedRelationship" value={data.mixedRelationship} onChange={updateField} placeholder="Explain how coursework and examination components complement one another." />
-                  <TextAreaField label="Sequencing and learning across components" name="mixedSequence" value={data.mixedSequence} onChange={updateField} placeholder="Explain how earlier work or feedback prepares students for later assessment." />
-                </>}
-
-                {data.assessmentType === 'coursework' && <>
-                  <TextAreaField label="Milestones and formative opportunities" name="courseworkMilestones" value={data.courseworkMilestones} onChange={updateField} placeholder="State proposal, draft, workshop, presentation or other preparation points." />
-                  <TextAreaField label="Submission requirements" name="courseworkSubmission" value={data.courseworkSubmission} onChange={updateField} placeholder="State format, length, referencing, group/individual requirements and submission route." />
-                </>}
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend>Expectations and preparation</legend>
-              <div className="form-grid">
-                <TextAreaField label="What students are expected to demonstrate" name="expectations" value={data.expectations} onChange={updateField} placeholder="Describe the knowledge, analysis and application expected." required />
-                <TextAreaField label="How the criteria will be applied" name="criteria" value={data.criteria} onChange={updateField} placeholder="Translate the marking criteria into clear expectations for this task." required />
-                <TextAreaField label="How students should prepare" name="preparation" value={data.preparation} onChange={updateField} placeholder="Give a practical sequence for preparation." required />
-                <TextAreaField label="Worked examples, practice and readiness support" name="workedExamples" value={data.workedExamples} onChange={updateField} placeholder="Identify examples, practice questions, Q&A, workshops or tutorial activity." />
-                <TextAreaField label="Common pitfalls" name="commonPitfalls" value={data.commonPitfalls} onChange={updateField} placeholder="List recurring misunderstandings or avoidable mistakes." />
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend>Feedback and support</legend>
-              <div className="form-grid">
-                <TextAreaField label="Feedback students will receive" name="feedbackAvailable" value={data.feedbackAvailable} onChange={updateField} placeholder="State the format, timing and location of feedback, including cohort-level feedback." required />
-                <TextAreaField label="How students should use the feedback" name="usingFeedback" value={data.usingFeedback} onChange={updateField} placeholder="Explain how feedback should inform later work or future performance." required />
-                <TextAreaField label="Support and contact routes" name="supportRoutes" value={data.supportRoutes} onChange={updateField} placeholder="State relevant office hours, tutorials, forums or contacts." />
-                <InputField label="KEATS or module link" name="keatsLink" value={data.keatsLink} onChange={updateField} placeholder="https://…" type="url" />
-              </div>
-            </fieldset>
-          </section>
-        )}
-
-        {step === 4 && (
-          <section aria-labelledby="review-heading">
-            <div className="section-heading">
-              <div>
-                <p className="section-number">04</p>
-                <h2 id="review-heading">Review and share</h2>
-              </div>
-              <p>Check the content below. The downloaded Word document remains fully editable.</p>
-            </div>
-
-            <article className="document-preview">
-              <header>
-                <p>King’s Business School</p>
-                <h3>Module Assessment and Feedback Guide</h3>
-                <span>{data.moduleCode} · {data.moduleTitle}</span>
-              </header>
-              <dl className="preview-meta">
-                <PreviewItem label="Assessment profile" value={data.assessmentType ? assessmentLabels[data.assessmentType] : ''} />
-                <PreviewItem label="Module leader" value={data.moduleLeader} />
-                <PreviewItem label="Assessment structure" value={data.assessmentStructure} />
-                <PreviewItem label="Purpose" value={data.assessmentPurpose} />
-                <PreviewItem label="Expectations" value={data.expectations} />
-                <PreviewItem label="Preparation" value={data.preparation} />
-                <PreviewItem label="Feedback" value={data.feedbackAvailable} />
-                <PreviewItem label="Using feedback" value={data.usingFeedback} />
-              </dl>
-              <button className="text-button" type="button" onClick={() => setStep(3)}>Edit guidance content</button>
-            </article>
-
-            <label className="confirmation">
-              <input type="checkbox" checked={confirmed} onChange={(event) => { setConfirmed(event.target.checked); setError(''); }} />
-              <span><strong>I have checked the information for accuracy.</strong> I understand that the module leader remains responsible for the final content.</span>
-            </label>
-
-            <div className="delivery-grid">
-              <section className="delivery-card primary-delivery">
-                <span className="delivery-number">A</span>
-                <h3>Download editable guide</h3>
-                <p>Create a Word document that can be edited, saved to SharePoint or uploaded to KEATS.</p>
-                <button type="button" className="primary-button" onClick={() => void downloadGuide()}>Download Word document</button>
-              </section>
-
-              <section className="delivery-card">
-                <span className="delivery-number">B</span>
-                <h3>Prepare email to SPO</h3>
-                <p>The guide downloads first. Your email application then opens with a prepared message; attach the downloaded document before sending.</p>
-                <label className="mini-field">SPO email address
-                  <input type="email" value={spoEmail} onChange={(event) => setSpoEmail(event.target.value)} placeholder="approved-address@kcl.ac.uk" />
-                </label>
-                <label className="mini-field">Programme Director CC (optional)
-                  <input type="email" value={pdCc} onChange={(event) => setPdCc(event.target.value)} placeholder="optional-address@kcl.ac.uk" />
-                </label>
-                <button type="button" className="secondary-button" onClick={() => void prepareEmail()}>Download and prepare email</button>
-              </section>
-            </div>
-          </section>
-        )}
-
-        <footer className="form-actions">
-          <button type="button" className="text-button danger" onClick={resetForm}>Clear draft</button>
-          <div>
-            {step > 1 && <button type="button" className="back-button" onClick={previousStep}>Back</button>}
-            {step < 4 && <button type="button" className="primary-button" onClick={nextStep}>Continue</button>}
-          </div>
-        </footer>
-      </form>
-      </>}
-
-      <footer className="site-footer">
-        <p>Manual completion or ChatGPT-assisted syllabus extraction</p>
-        <p>Do not enter identifiable student information or upload student work.</p>
-      </footer>
-    </main>
-  );
+        <section className="form-section"><p className="section-label">7 · Optional SPO handover</p><h2>Package useful revision materials</h2><p className="section-intro">The generated document can be accompanied by approved materials. This checklist does not block download and is not a universal obligation.</p><div className="handover-list">{handover.map(item => <div className="handover-item" key={item.id}><span>{item.label}</span><select aria-label={`${item.label} status`} value={item.status} onChange={e => updateHandover(item.id, 'status', e.target.value)}><option value="included">Included</option><option value="link">Link provided</option><option value="follow">To follow</option><option value="na">Not applicable</option></select>{item.status === 'link' && <input aria-label={`${item.label} link`} type="url" placeholder="https://…" value={item.url} onChange={e => updateHandover(item.id, 'url', e.target.value)} />}</div>)}</div><details className="release-safeguards"><summary>Release and anonymisation safeguards</summary><ul><li>Prefer staff-created, generic or properly redacted examples. Do not automatically share a previous student submission.</li><li>Use student work only when policy permits, any required permission is in place and anonymisation goes beyond removing a name.</li><li>Remove metadata, tracked changes, comments, filenames and contextual details that could reveal identity.</li><li>Check past materials for protected questions or topics that may be reused; generalise content while preserving lessons about reasoning and method.</li><li>Use the current approved rubric, label materials as mock, past, illustrative or generic, and confirm accessibility and authorisation before release.</li></ul></details><div className="email-grid"><label className="field"><span>SPO email address</span><input type="email" value={spoEmail} onChange={e => setSpoEmail(e.target.value)} /></label><label className="field"><span>Optional CC</span><input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} /></label></div><button type="button" className="secondary-button" onClick={openEmail}>Prepare email to SPO</button><p className="field-help">Your email app will open with a draft. Attach the downloaded document and approved materials before sending.</p></section>
+      </>}</section>}
+    </div>
+    <footer><p>Created by Dr Canh Thien Dang, with development assistance from ChatGPT by OpenAI.</p><p>The toolkit provides editable starting points and examples. It is not institutional policy, legal advice or automatic approval. Users remain responsible for local requirements and final documents.</p><a href="/admin">Owner reporting</a></footer>
+  </main>;
 }

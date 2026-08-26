@@ -1,39 +1,47 @@
-# KBS Module Assessment and Feedback Guide Generator
+# Assessment and Feedback Toolkit
 
-A browser-based tool that standardises module assessment and feedback guidance through either a manual route or a ChatGPT-assisted syllabus-extraction route.
+An institution-neutral public toolkit created by Dr Canh Thien Dang, with development assistance from ChatGPT by OpenAI. It helps university educators produce two editable student-facing Word documents:
 
-Current hosted version: <https://kbs-module-guide-generator.maian6396.chatgpt.site>
+1. Before assessment: an Assessment and Feedback Guide.
+2. After assessment: cohort-level General Feedback suitable for KEATS or another learning platform.
 
-## What colleagues can do
+Current hosted site: <https://assessment-feedback-toolkit.maian6396.chatgpt.site>
 
-1. Choose a ChatGPT-assisted or manual completion route.
-2. In the AI-assisted route, copy the supplied extraction instructions, upload the syllabus in the colleague's own ChatGPT account, and paste the structured result back into the site.
-3. Let the site populate the form and identify only essential and optional missing information.
-4. Choose or confirm an examination-heavy, mixed-assessment or coursework-only profile.
-5. Review the guide and download an editable Word document.
-6. Optionally prepare an email to an SPO, with the Programme Director copied.
+## Main workflows
 
-The email workflow downloads the Word document and opens a prepared email. Browsers cannot attach a local file automatically, so the colleague must attach the downloaded document before sending.
+- Manual and ChatGPT-assisted routes for both documents.
+- Examination-heavy, mixed-assessment and coursework-only module profiles.
+- Format-aware examples for examinations, essays/reports, problem sets, data projects, cases, presentations, group projects and take-home work.
+- Generic Word branding for external colleagues and optional KCL Word branding using the supplied KCL logo and accessible red palette.
+- Optional SPO handover checklist and prepared email covering approved revision materials.
+- Local browser draft storage; nothing is published automatically.
 
 ## Privacy boundary
 
-- All form data entered or imported into this site stays in the browser and is saved only in local browser storage.
-- In the manual route, the syllabus selector records the filename for the output but does not read or upload the document.
-- In the AI-assisted route, the colleague uploads the syllabus directly to their own ChatGPT conversation. The website never receives the syllabus or a ChatGPT credential.
-- ChatGPT and API billing are separate; this design uses the colleague's normal ChatGPT experience and does not require an API key.
-- Users are instructed not to enter identifiable student information or upload student work.
+- Form content, documents and local drafts remain in the user's browser/computer.
+- The site never receives a syllabus or ChatGPT credentials. In the AI route, the user works directly in their own ChatGPT account.
+- Users are instructed not to enter identifiable student data, individual scripts, raw marks, named comments or identifiable student work.
+- Optional usage reporting is opt-in and records only faculty, department, document stage, route, broad profile, format, academic period and event date after successful generation.
+- Usage events contain no name, email, module identifier, form content, document, ChatGPT content or persistent visitor identifier. They are retained for up to 24 months.
+- The authenticated owner dashboard shows monthly aggregates and suppresses cells below five. Counts are document-generation events, not unique users.
 
-## Recipient configuration
-
-The SPO recipient and optional Programme Director CC are entered on the final screen. To preconfigure them later, set `DEFAULT_SPO_EMAIL` and `DEFAULT_PD_CC` near the top of `app/page.tsx`.
+Production uses the `ADMIN_CHATGPT_USER_ID` environment value to restrict `/admin` and its reporting API to the authorised owner account.
 
 ## Development and verification
 
 - `pnpm dev` starts the local site.
-- `pnpm build` creates the production build.
-- `pnpm exec tsc --noEmit` runs the TypeScript check.
-- `scripts/smoke-test.mjs` verifies Word generation for all three assessment profiles after bundling `app/docx-generator.ts` for Node.
+- `pnpm exec tsc --noEmit` checks TypeScript.
+- `pnpm lint` runs the source checks.
+- `pnpm build` creates the Sites deployment build and packages D1 migrations.
+- `pnpm db:generate` regenerates the D1 migration after schema changes.
+- `scripts/generate-docx-samples.ts` creates four representative validation documents after bundling.
+- `scripts/smoke-test.mjs` verifies the sample DOCX archives.
 
-The final examination-heavy, mixed-assessment and coursework-only sample documents were rendered page by page for visual inspection. Each also passed the document accessibility audit with no high-, medium- or low-priority findings.
+Four representative documents—before/after and generic/KCL—are retained locally under `artifacts/validation-docx`. Every page was rendered and inspected. All four passed the Word accessibility audit with zero high-, medium- and low-priority findings.
 
-The generated Word document follows the `compact_reference_guide` design preset with a restrained operational-pack opening: US Letter, 1-inch margins, Calibri 11 pt body text, 1.25 line spacing, fixed-width metadata table geometry and quiet page numbering.
+## Continuation notes
+
+- Keep the public website institution-neutral. Use the KCL mark only in the explicitly selected KCL Word output.
+- Treat examples as editable suggestions rather than policy wording.
+- Do not weaken the analytics allowlist, 24-month purge, small-cell suppression or owner-only authorization.
+- Confirm required institutional privacy/IT approval before treating optional analytics as an approved institutional service.
