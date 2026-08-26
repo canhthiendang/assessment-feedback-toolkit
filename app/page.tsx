@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { aiPrompt, examplesFor } from './examples';
 import { createToolkitDocument, triggerDownload } from './docx-generator';
+import { createSpoEmail } from './spo-email';
 import { DocumentBrand, DocumentStage, HandoverItem, ToolkitData, WorkflowMode, emptyData, formatLabels, initialHandover, profileLabels } from './types';
 
 const STORAGE_KEY = 'assessment-feedback-toolkit-draft-v2';
@@ -101,10 +102,17 @@ export default function Home() {
   function updateHandover(id: string, key: 'status' | 'url', value: string) { setHandover(items => items.map(item => item.id === id ? { ...item, [key]: value } : item) as HandoverItem[]); }
   function openEmail() {
     if (!spoEmail.trim()) { setStatus('Enter the SPO email address first.'); return; }
-    const selected = handover.filter(item => item.status !== 'na').map(item => `- ${item.label}: ${item.status === 'included' ? 'included' : item.status === 'link' ? `link provided${item.url ? ` (${item.url})` : ''}` : 'to follow'}`).join('\n');
-    const subject = `${data.moduleCode || data.moduleTitle}: materials for KEATS/programme page`;
-    const body = `Dear SPO,\n\nPlease upload or link the approved materials below on the relevant KEATS or programme page.\n\n${selected}\n\nPlease confirm the page location, or let me know if a different location is required. I will attach the downloaded files before sending this email.\n\nBest wishes,\n${data.moduleLeader}`;
-    const query = new URLSearchParams({ subject, body }); if (ccEmail.trim()) query.set('cc', ccEmail.trim()); window.location.href = `mailto:${encodeURIComponent(spoEmail.trim())}?${query}`;
+    const missingEmailDetails = [
+      !data.moduleCode.trim() && 'module code',
+      !data.moduleTitle.trim() && 'module title',
+      !data.moduleLeader.trim() && 'module leader',
+    ].filter(Boolean);
+    if (missingEmailDetails.length) {
+      setStatus(`Add the ${missingEmailDetails.join(', ')} before preparing the SPO email.`);
+      document.getElementById('field-moduleCode')?.scrollIntoView({ behavior: 'smooth' });
+      return;
+    }
+    window.location.href = createSpoEmail(data, handover, spoEmail, ccEmail).href;
   }
 
   return <main data-toolkit-version="2026.08.26.1">
