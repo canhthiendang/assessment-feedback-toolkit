@@ -10,8 +10,69 @@ import {
 } from './docx-generator';
 
 const STORAGE_KEY = 'kbs-module-guide-draft-v1';
+const WORKFLOW_KEY = 'kbs-module-guide-workflow-v1';
 const DEFAULT_SPO_EMAIL = '';
 const DEFAULT_PD_CC = '';
+
+type WorkflowMode = '' | 'manual' | 'ai';
+
+const aiExtractionPrompt = `You are helping a university module leader prepare a concise Module Assessment and Feedback Guide.
+
+Read the syllabus or module outline I attach, together with any additional information I provide. Extract only information supported by those sources. Do not invent missing facts. Write concise, student-facing wording. Return ONLY one valid JSON object, with no markdown fences or commentary.
+
+Use exactly these keys and string values:
+{
+  "assessmentType": "exam | mixed | coursework | ",
+  "moduleCode": "",
+  "moduleTitle": "",
+  "level": "",
+  "department": "",
+  "moduleLeader": "",
+  "academicYear": "",
+  "teachingPeriod": "",
+  "syllabusName": "",
+  "sourceNotes": "",
+  "assessmentStructure": "",
+  "assessmentPurpose": "",
+  "expectations": "",
+  "criteria": "",
+  "preparation": "",
+  "workedExamples": "",
+  "commonPitfalls": "",
+  "feedbackAvailable": "",
+  "usingFeedback": "",
+  "supportRoutes": "",
+  "keatsLink": "",
+  "examFormat": "",
+  "examCoverage": "",
+  "examConditions": "",
+  "mixedRelationship": "",
+  "mixedSequence": "",
+  "courseworkMilestones": "",
+  "courseworkSubmission": ""
+}
+
+Assessment type rules: use "exam" for 80–100% examination, "mixed" for 1–79% examination, and "coursework" for 0% examination. Leave any unsupported value as an empty string. Do not include student names, student work or identifiable student information.`;
+
+const essentialFields: Array<{ name: keyof GuideData; label: string; step: number }> = [
+  { name: 'assessmentType', label: 'Assessment profile', step: 1 },
+  { name: 'moduleCode', label: 'Module code', step: 2 },
+  { name: 'moduleTitle', label: 'Module title', step: 2 },
+  { name: 'moduleLeader', label: 'Module leader', step: 2 },
+  { name: 'assessmentStructure', label: 'Assessment structure and weighting', step: 3 },
+  { name: 'assessmentPurpose', label: 'Purpose of the assessment', step: 3 },
+  { name: 'expectations', label: 'What students are expected to demonstrate', step: 3 },
+  { name: 'criteria', label: 'How the marking criteria will be applied', step: 3 },
+  { name: 'preparation', label: 'How students should prepare', step: 3 },
+  { name: 'feedbackAvailable', label: 'Feedback students will receive', step: 3 },
+  { name: 'usingFeedback', label: 'How students should use feedback', step: 3 },
+];
+
+const recommendedFields: Array<{ name: keyof GuideData; label: string; step: number }> = [
+  { name: 'workedExamples', label: 'Worked examples or practice opportunities', step: 3 },
+  { name: 'commonPitfalls', label: 'Common pitfalls', step: 3 },
+  { name: 'supportRoutes', label: 'Support and contact routes', step: 3 },
+];
 
 const assessmentTypes: Array<{
   id: AssessmentType;
@@ -136,7 +197,57 @@ function PreviewItem({ label, value }: { label: string; value: string }) {
   );
 }
 
+function missingFrom(fields: Array<{ name: keyof GuideData; label: string; step: number }>, data: GuideData) {
+  return fields.filter(({ name }) => !String(data[name] || '').trim());
+}
+
+function profileRecommendedFields(data: GuideData) {
+  if (data.assessmentType === 'exam') {
+    return [
+      ...recommendedFields,
+      { name: 'examFormat' as const, label: 'Examination format and duration', step: 3 },
+      { name: 'examCoverage' as const, label: 'Examination coverage', step: 3 },
+      { name: 'examConditions' as const, label: 'Examination conditions and permitted materials', step: 3 },
+    ];
+  }
+  if (data.assessmentType === 'mixed') {
+    return [
+      ...recommendedFields,
+      { name: 'mixedRelationship' as const, label: 'Relationship between assessment components', step: 3 },
+      { name: 'mixedSequence' as const, label: 'Sequencing across assessment components', step: 3 },
+    ];
+  }
+  if (data.assessmentType === 'coursework') {
+    return [
+      ...recommendedFields,
+      { name: 'courseworkMilestones' as const, label: 'Coursework milestones and formative opportunities', step: 3 },
+      { name: 'courseworkSubmission' as const, label: 'Coursework submission requirements', step: 3 },
+    ];
+  }
+  return recommendedFields;
+}
+
+function parseAiGuide(raw: string): Partial<GuideData> {
+  const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('No JSON object was found.');
+  const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
+  const allowed = new Set(Object.keys(emptyGuide));
+  const result: Partial<GuideData> = {};
+
+  for (const [key, value] of Object.entries(parsed)) {
+    if (!allowed.has(key) || typeof value !== 'string') continue;
+    if (key === 'assessmentType' && value && !['exam', 'mixed', 'coursework'].includes(value)) continue;
+    (result as Record<string, string>)[key] = value.trim();
+  }
+
+  if (!Object.keys(result).length) throw new Error('The response did not contain any recognised guide fields.');
+  return result;
+}
+
 export default function Home() {
+  const [workflow, setWorkflow] = useState<WorkflowMode>('');
   const [step, setStep] = useState(1);
   const [data, setData] = useState<GuideData>(emptyGuide);
   const [ready, setReady] = useState(false);
@@ -145,11 +256,15 @@ export default function Home() {
   const [pdCc, setPdCc] = useState(DEFAULT_PD_CC);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [aiResponse, setAiResponse] = useState('');
+  const [aiImported, setAiImported] = useState(false);
 
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored) setData({ ...emptyGuide, ...JSON.parse(stored) });
+      const storedWorkflow = window.localStorage.getItem(WORKFLOW_KEY);
+      if (storedWorkflow === 'manual' || storedWorkflow === 'ai') setWorkflow(storedWorkflow);
     } catch {
       // A damaged local draft should never prevent the form from opening.
     }
@@ -161,10 +276,18 @@ export default function Home() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data, ready]);
 
+  useEffect(() => {
+    if (!ready || !workflow) return;
+    window.localStorage.setItem(WORKFLOW_KEY, workflow);
+  }, [workflow, ready]);
+
   const selectedProfile = useMemo(
     () => assessmentTypes.find((type) => type.id === data.assessmentType),
     [data.assessmentType],
   );
+
+  const essentialMissing = useMemo(() => missingFrom(essentialFields, data), [data]);
+  const recommendedMissing = useMemo(() => missingFrom(profileRecommendedFields(data), data), [data]);
 
   function updateField(name: keyof GuideData, value: string) {
     setData((current) => ({ ...current, [name]: value }));
@@ -174,6 +297,47 @@ export default function Home() {
 
   function selectProfile(type: AssessmentType) {
     updateField('assessmentType', type);
+  }
+
+  function chooseWorkflow(mode: Exclude<WorkflowMode, ''>) {
+    setWorkflow(mode);
+    setError('');
+    setStatus(mode === 'ai'
+      ? 'AI-assisted route selected. Use the three steps below to start from your syllabus.'
+      : 'Manual route selected. Your entries and selected filename remain on this device.');
+  }
+
+  async function copyAiPrompt() {
+    try {
+      await navigator.clipboard.writeText(aiExtractionPrompt);
+      setStatus('Extraction instructions copied. Open ChatGPT, attach the syllabus, paste the instructions and add any extra information.');
+      setError('');
+    } catch {
+      setError('Your browser could not copy automatically. Select and copy the instructions shown below.');
+    }
+  }
+
+  function importAiResponse() {
+    if (!aiResponse.trim()) {
+      setError('Paste the structured response from ChatGPT first.');
+      return;
+    }
+    try {
+      const imported = parseAiGuide(aiResponse);
+      const merged = { ...data, ...imported } as GuideData;
+      const remaining = missingFrom(essentialFields, merged);
+      setData(merged);
+      setAiImported(true);
+      setConfirmed(false);
+      setStep(remaining[0]?.step || 4);
+      setError('');
+      setStatus(remaining.length
+        ? `Imported the syllabus information. Only ${remaining.length} essential ${remaining.length === 1 ? 'item remains' : 'items remain'} for you to complete.`
+        : 'Imported the syllabus information. All essential fields are complete; please review them before downloading.');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      setError('I could not read that response. Ask ChatGPT to return only the JSON object, then copy the complete response again.');
+    }
   }
 
   function validateCurrentStep() {
@@ -282,7 +446,9 @@ export default function Home() {
           <p className="brand-line">King’s Business School</p>
           <p className="brand-subline">Programme enhancement toolkit</p>
         </div>
-        <span className="privacy-pill">Private in this browser</span>
+        <span className={`privacy-pill ${workflow === 'ai' ? 'ai-active' : ''}`}>
+          {workflow === 'ai' ? 'ChatGPT-assisted route' : workflow === 'manual' ? 'Manual route · local draft' : 'Manual or AI-assisted'}
+        </span>
       </header>
 
       <section className="hero compact-hero">
@@ -290,15 +456,116 @@ export default function Home() {
           <p className="kicker">Module guide generator</p>
           <h1>Create a clear assessment and feedback guide</h1>
           <p className="lede">
-            Complete the structured prompts, check the preview, and download an editable Word document for sharing.
+            Start from your syllabus with ChatGPT, or complete the guide manually. Check the result and download an editable Word document.
           </p>
         </div>
-        <div className="step-indicator" aria-label={`Step ${step} of 4`}>
-          <span>Step {step} of 4</span>
-          <div className="progress-track"><span style={{ width: `${step * 25}%` }} /></div>
-          <strong>{steps[step - 1]}</strong>
-        </div>
+        {workflow ? (
+          <div className="step-indicator" aria-label={`Step ${step} of 4`}>
+            <span>Step {step} of 4</span>
+            <div className="progress-track"><span style={{ width: `${step * 25}%` }} /></div>
+            <strong>{steps[step - 1]}</strong>
+          </div>
+        ) : (
+          <div className="step-indicator route-summary">
+            <span>Choose your route</span>
+            <strong>AI-assisted or manual</strong>
+            <small>You can switch routes without losing your draft.</small>
+          </div>
+        )}
       </section>
+
+      {!workflow ? (
+        <section className="route-picker" aria-labelledby="route-heading">
+          <div className="section-heading">
+            <div>
+              <p className="section-number">START HERE</p>
+              <h2 id="route-heading">How would you like to complete the guide?</h2>
+            </div>
+            <p>Both routes produce the same editable Word document.</p>
+          </div>
+          <div className="route-grid">
+            <button type="button" className="route-card recommended" onClick={() => chooseWorkflow('ai')}>
+              <span className="route-badge">Recommended</span>
+              <strong>Start from my syllabus with ChatGPT</strong>
+              <p>Use your own ChatGPT account to extract the available information. Return here and complete only what is missing.</p>
+              <span className="route-action">Choose AI-assisted route <i>→</i></span>
+            </button>
+            <button type="button" className="route-card" onClick={() => chooseWorkflow('manual')}>
+              <span className="route-badge neutral">No AI</span>
+              <strong>Complete the form manually</strong>
+              <p>Use the existing structured form. Your entries and selected filename remain in this browser.</p>
+              <span className="route-action">Choose manual route <i>→</i></span>
+            </button>
+          </div>
+          <p className="safety-line">Do not upload student work or identifiable student information in either route.</p>
+        </section>
+      ) : <>
+
+      <div className="workflow-strip">
+        <div>
+          <span>{workflow === 'ai' ? 'AI-assisted route' : 'Manual route'}</span>
+          <strong>{workflow === 'ai' ? 'Start with ChatGPT, then review here' : 'Complete the structured form yourself'}</strong>
+        </div>
+        <button type="button" onClick={() => { setWorkflow(''); setError(''); setStatus(''); }}>Change route</button>
+      </div>
+
+      {workflow === 'ai' && (
+        <section className="ai-assist" aria-labelledby="ai-assist-heading">
+          <div className="ai-assist-heading">
+            <div>
+              <p className="section-number">AI ASSISTANT</p>
+              <h2 id="ai-assist-heading">Let ChatGPT prepare the first draft</h2>
+            </div>
+            <p>ChatGPT does the extraction; this site checks what is still missing.</p>
+          </div>
+
+          <ol className="ai-steps">
+            <li><span>1</span><div><strong>Copy the extraction instructions</strong><small>They tell ChatGPT not to invent missing information.</small></div></li>
+            <li><span>2</span><div><strong>Open ChatGPT and attach your syllabus</strong><small>Paste the instructions and add any other module information you wish.</small></div></li>
+            <li><span>3</span><div><strong>Paste ChatGPT’s response below</strong><small>The form will fill itself and identify only the remaining questions.</small></div></li>
+          </ol>
+
+          <div className="ai-actions">
+            <button type="button" className="primary-button" onClick={() => void copyAiPrompt()}>Copy extraction instructions</button>
+            <a className="secondary-button link-button" href="https://chatgpt.com/" target="_blank" rel="noreferrer">Open ChatGPT</a>
+          </div>
+
+          <details className="prompt-details">
+            <summary>View or manually copy the extraction instructions</summary>
+            <textarea readOnly value={aiExtractionPrompt} rows={10} aria-label="ChatGPT extraction instructions" />
+          </details>
+
+          <label className="ai-response" htmlFor="ai-response">
+            <span>Paste ChatGPT’s structured response</span>
+            <textarea
+              id="ai-response"
+              value={aiResponse}
+              onChange={(event) => setAiResponse(event.target.value)}
+              rows={8}
+              placeholder={'Paste the complete JSON response here, beginning with { and ending with }'}
+            />
+          </label>
+          <button type="button" className="import-button" onClick={importAiResponse}>Fill the form and check what is missing</button>
+
+          {aiImported && (
+            <div className="missing-review" aria-live="polite">
+              <div>
+                <strong>{essentialMissing.length ? `${essentialMissing.length} essential ${essentialMissing.length === 1 ? 'item' : 'items'} still needed` : 'All essential information is present'}</strong>
+                <p>{essentialMissing.length ? 'The form will take you directly to these questions.' : 'Review the imported wording and edit anything that needs refinement.'}</p>
+              </div>
+              {essentialMissing.length > 0 && <ul>{essentialMissing.map((item) => <li key={item.name}>{item.label}</li>)}</ul>}
+              {recommendedMissing.length > 0 && (
+                <details>
+                  <summary>{recommendedMissing.length} optional refinements are still blank</summary>
+                  <ul>{recommendedMissing.map((item) => <li key={item.name}>{item.label}</li>)}</ul>
+                </details>
+              )}
+            </div>
+          )}
+
+          <p className="ai-privacy"><strong>Privacy:</strong> the syllabus is uploaded to your own ChatGPT conversation, not to this website. ChatGPT Free accounts support file uploads subject to their current usage limits. Check your account’s data controls before using work documents.</p>
+        </section>
+      )}
 
       <nav className="step-nav" aria-label="Form progress">
         {steps.map((label, index) => {
@@ -350,7 +617,11 @@ export default function Home() {
 
             <div className="local-note">
               <span aria-hidden="true">✓</span>
-              <p><strong>Your information stays on this device.</strong> Phase 1 does not upload syllabi or responses to a server.</p>
+              {workflow === 'manual' ? (
+                <p><strong>Your information stays on this device.</strong> The manual route does not upload syllabi or responses to a server.</p>
+              ) : (
+                <p><strong>ChatGPT supplied the first draft.</strong> Review the assessment profile and correct it if the syllabus was ambiguous.</p>
+              )}
             </div>
           </section>
         )}
@@ -386,7 +657,7 @@ export default function Home() {
                   <small>{data.syllabusName || 'No file selected'}</small>
                 </label>
                 <input id="syllabus-upload" className="visually-hidden" type="file" accept=".pdf,.doc,.docx" onChange={onSyllabus} />
-                <small>The file remains on your device and is not read automatically in Phase 1.</small>
+                <small>{workflow === 'ai' ? 'This selector records the filename only. Attach the actual syllabus in your ChatGPT conversation.' : 'The file remains on your device and is not read automatically.'}</small>
               </div>
               <TextAreaField
                 label="Additional source information"
@@ -529,9 +800,10 @@ export default function Home() {
           </div>
         </footer>
       </form>
+      </>}
 
       <footer className="site-footer">
-        <p>Phase 1 · Structured standardisation without AI processing</p>
+        <p>Manual completion or ChatGPT-assisted syllabus extraction</p>
         <p>Do not enter identifiable student information or upload student work.</p>
       </footer>
     </main>

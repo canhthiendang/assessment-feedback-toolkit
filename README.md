@@ -1,23 +1,26 @@
 # KBS Module Assessment and Feedback Guide Generator
 
-A browser-based Phase 1 tool that standardises module assessment and feedback guidance without sending form data or syllabus files to a server.
+A browser-based tool that standardises module assessment and feedback guidance through either a manual route or a ChatGPT-assisted syllabus-extraction route.
 
 Current hosted version: <https://kbs-module-guide-generator.maian6396.chatgpt.site>
 
 ## What colleagues can do
 
-1. Choose an examination-heavy, mixed-assessment or coursework-only profile.
-2. Enter module details and optionally select a local syllabus or outline.
-3. Complete prompts tailored to the assessment profile.
-4. Review the guide and download an editable Word document.
-5. Optionally prepare an email to an SPO, with the Programme Director copied.
+1. Choose a ChatGPT-assisted or manual completion route.
+2. In the AI-assisted route, copy the supplied extraction instructions, upload the syllabus in the colleague's own ChatGPT account, and paste the structured result back into the site.
+3. Let the site populate the form and identify only essential and optional missing information.
+4. Choose or confirm an examination-heavy, mixed-assessment or coursework-only profile.
+5. Review the guide and download an editable Word document.
+6. Optionally prepare an email to an SPO, with the Programme Director copied.
 
 The email workflow downloads the Word document and opens a prepared email. Browsers cannot attach a local file automatically, so the colleague must attach the downloaded document before sending.
 
 ## Privacy boundary
 
-- All Phase 1 form data stays in the browser and is saved only in local browser storage.
-- The syllabus selector records the filename for the output but does not read or upload the document.
+- All form data entered or imported into this site stays in the browser and is saved only in local browser storage.
+- In the manual route, the syllabus selector records the filename for the output but does not read or upload the document.
+- In the AI-assisted route, the colleague uploads the syllabus directly to their own ChatGPT conversation. The website never receives the syllabus or a ChatGPT credential.
+- ChatGPT and API billing are separate; this design uses the colleague's normal ChatGPT experience and does not require an API key.
 - Users are instructed not to enter identifiable student information or upload student work.
 
 ## Recipient configuration
