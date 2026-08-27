@@ -10,6 +10,9 @@ Current hosted site: <https://assessment-feedback-documents.maian6396.chatgpt.si
 ## Main workflows
 
 - Manual and ChatGPT-assisted routes for both documents.
+- The ChatGPT route asks colleagues to use approved syllabus, course aims or learning outcomes, assessment brief, marking guide and rubric sources, with clear safeguards for restricted and identifiable material.
+- Each ChatGPT route includes a fictional JSON example that can be copied or loaded into the response box to demonstrate automatic field completion.
+- AI prompts request pedagogically differentiated illustrative answer tiers, aligned to supplied criteria and framed as feedback for learning rather than official model answers.
 - Examination-heavy, mixed-assessment and coursework-only module profiles.
 - Format-aware examples for examinations, essays/reports, problem sets, data projects, cases, presentations, group projects and take-home work.
 - Generic Word branding for external colleagues and optional KCL Word branding using the supplied KCL logo and accessible red palette.
