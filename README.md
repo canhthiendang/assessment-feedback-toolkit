@@ -12,6 +12,8 @@ Public-source GitHub Pages edition:
 
 The GitHub Pages edition is deliberately static and local-only. It retains the manual and ChatGPT-assisted routes, browser draft storage, JSON import, editable Word generation, optional KCL document branding and SPO email preparation. It does not include the usage-reporting API, database or private owner dashboard. Form entries and generated documents are processed in the user's browser.
 
+GitHub Pages is served from the committed `docs` folder on the `main` branch.
+
 The source is publicly visible for transparency. No open-source licence has yet been selected, so public visibility should not be interpreted as granting unrestricted rights to redistribute the code. Colleagues may use the hosted toolkit subject to their own institutional requirements.
 
 ## Main workflows
@@ -28,14 +30,12 @@ The source is publicly visible for transparency. No open-source licence has yet 
 
 ## Privacy boundary
 
+For the public GitHub Pages version:
+
 - Form content, documents and local drafts remain in the user's browser/computer.
 - The site never receives a syllabus or ChatGPT credentials. In the AI route, the user works directly in their own ChatGPT account.
 - Users are instructed not to enter identifiable student data, individual scripts, raw marks, named comments or identifiable student work.
-- Optional usage reporting is opt-in and records only faculty, department, document stage, route, broad profile, format, academic period and event date after successful generation.
-- Usage events contain no name, email, module identifier, form content, document, ChatGPT content or persistent visitor identifier. They are retained for up to 24 months.
-- The authenticated owner dashboard shows monthly aggregates and suppresses cells below five. Counts are document-generation events, not unique users.
-
-Production uses the `ADMIN_CHATGPT_USER_ID` environment value to restrict `/admin` and its reporting API to the authorised owner account.
+- Usage reporting, database storage and the private owner dashboard are not included in the static GitHub Pages build.
 
 ## Development and verification
 
@@ -43,7 +43,7 @@ Production uses the `ADMIN_CHATGPT_USER_ID` environment value to restrict `/admi
 - `pnpm exec tsc --noEmit` checks TypeScript.
 - `pnpm lint` runs the source checks.
 - `pnpm build` creates the Sites deployment build and packages D1 migrations.
-- `pnpm build:pages` creates the static, local-only GitHub Pages edition in `dist-github-pages`.
+- `pnpm build:pages` creates the static, local-only GitHub Pages edition in `docs`.
 - `pnpm db:generate` regenerates the D1 migration after schema changes.
 - `scripts/generate-docx-samples.ts` creates four representative validation documents after bundling.
 - `scripts/smoke-test.mjs` verifies the sample DOCX archives.

@@ -14,7 +14,7 @@ export default defineConfig({
     'process.env.NEXT_PUBLIC_BASE_PATH': JSON.stringify(basePath),
   },
   build: {
-    outDir: '../dist-github-pages',
+    outDir: '../docs',
     emptyOutDir: true,
   },
 });
