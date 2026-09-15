@@ -1,2 +1,2 @@
 # assessment-feedback-toolkit
-To aid creating student-centric assessment and feedback
+A transparent, browser-based toolkit for creating editable assessment guidance and cohort-level feedback documents for higher education.
