@@ -7,6 +7,15 @@ An institution-neutral public toolkit created by Dr Canh Thien Dang, with develo
 
 Current hosted site: <https://assessment-feedback-documents.maian6396.chatgpt.site>
 
+Public-source GitHub Pages edition:
+
+- Repository: <https://github.com/canhthiendang/assessment-feedback-toolkit>
+- Website: <https://canhthiendang.github.io/assessment-feedback-toolkit/>
+
+The GitHub Pages edition is deliberately static and local-only. It retains the manual and ChatGPT-assisted routes, browser draft storage, JSON import, editable Word generation, optional KCL document branding and SPO email preparation. It does not include the usage-reporting API, database or private owner dashboard. Form entries and generated documents are processed in the user's browser.
+
+The source is publicly visible for transparency. No open-source licence has yet been selected, so public visibility should not be interpreted as granting unrestricted rights to redistribute the code. Colleagues may use the hosted toolkit subject to their own institutional requirements.
+
 ## Main workflows
 
 - Manual and ChatGPT-assisted routes for both documents.
@@ -36,6 +45,7 @@ Production uses the `ADMIN_CHATGPT_USER_ID` environment value to restrict `/admi
 - `pnpm exec tsc --noEmit` checks TypeScript.
 - `pnpm lint` runs the source checks.
 - `pnpm build` creates the Sites deployment build and packages D1 migrations.
+- `pnpm build:pages` creates the static, local-only GitHub Pages edition in `dist-github-pages`.
 - `pnpm db:generate` regenerates the D1 migration after schema changes.
 - `scripts/generate-docx-samples.ts` creates four representative validation documents after bundling.
 - `scripts/smoke-test.mjs` verifies the sample DOCX archives.

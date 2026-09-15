@@ -34,7 +34,11 @@ yarn-error.log*
 next-env.d.ts
 tsconfig.tsbuildinfo
 /dist/
+/dist-github-pages/
 /.wrangler/
 /outputs/
 /work/
 /artifacts/
+
+# private working material - never publish with the public source repository
+/submission/
