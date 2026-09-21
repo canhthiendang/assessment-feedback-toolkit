@@ -14,6 +14,12 @@ The GitHub Pages edition is deliberately static and local-only. It retains the m
 
 GitHub Pages is served from the committed `docs` folder on the `main` branch.
 
+## Local Assessment & Feedback Slides pilot
+
+The School-specific PowerPoint pilot is off by default. To review it locally, start the application with `NEXT_PUBLIC_ENABLE_SLIDES_PILOT=true`. The pilot creates an editable three-slide PowerPoint based on the supplied template and an editable companion Word document. Do not enable it in the public build until the pilot has been approved.
+
+The feedback route links to the approved Microsoft Form at <https://forms.cloud.microsoft/e/2CbzbswhcQ>. It appears in the navigation, after document generation and in the dedicated feedback section. Aggregate reporting requires the non-static server edition, its authenticated owner dashboard and the approved database migration. GitHub Pages remains local-only and does not collect analytics.
+
 The source is publicly visible for transparency. No open-source licence has yet been selected, so public visibility should not be interpreted as granting unrestricted rights to redistribute the code. Colleagues may use the hosted toolkit subject to their own institutional requirements.
 
 ## Main workflows
@@ -46,6 +52,7 @@ For the public GitHub Pages version:
 - `pnpm build:pages` creates the static, local-only GitHub Pages edition in `docs`.
 - `pnpm db:generate` regenerates the D1 migration after schema changes.
 - `scripts/generate-docx-samples.ts` creates four representative validation documents after bundling.
+- `scripts/generate-pilot-samples.ts` creates a fictional pilot PowerPoint and companion DOCX for local validation.
 - `scripts/smoke-test.mjs` verifies the sample DOCX archives.
 
 Four representative documents—before/after and generic/KCL—are retained locally under `artifacts/validation-docx`. Every page was rendered and inspected. All four passed the Word accessibility audit with zero high-, medium- and low-priority findings.

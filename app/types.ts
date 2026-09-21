@@ -1,5 +1,6 @@
 export type DocumentStage = 'before' | 'after';
 export type WorkflowMode = 'manual' | 'ai';
+export type BeforeProduct = 'guide' | 'slides';
 export type DocumentBrand = 'generic' | 'kcl';
 export type AssessmentProfile = 'exam' | 'mixed' | 'coursework';
 
@@ -8,11 +9,13 @@ export type AssessmentFormat =
   | 'econometrics_project' | 'case_analysis' | 'presentation' | 'group_project' | 'take_home';
 
 export type ToolkitData = {
-  moduleCode: string; moduleTitle: string; level: string; faculty: string; department: string;
+  moduleCode: string; moduleTitle: string; level: string; institution: string; faculty: string; department: string;
   moduleLeader: string; academicYear: string; teachingPeriod: string; assessmentProfile: AssessmentProfile | ''; assessmentFormat: AssessmentFormat | '';
   assessmentStructure: string; assessmentPurpose: string; expectations: string; criteria: string;
   preparation: string; workedExamples: string; commonPitfalls: string; assessmentRequirements: string;
   feedbackAvailable: string; usingFeedback: string; supportRoutes: string; cohortContext: string;
+  learningOutcomes: string; fairnessAndClarity: string; skillsEmployability: string;
+  missingInformation: string;
   evaluatedLearning: string; performancePatterns: string; cohortStrengths: string; improvementAreas: string;
   criteriaApplication: string; improvedApproaches: string; futureUse: string; debriefSupport: string; keatsLocation: string;
 };
@@ -31,9 +34,11 @@ export const profileLabels: Record<AssessmentProfile, string> = {
 };
 
 export const emptyData: ToolkitData = {
-  moduleCode: '', moduleTitle: '', level: '', faculty: '', department: '', moduleLeader: '', academicYear: '2026/27',
+  moduleCode: '', moduleTitle: '', level: '', institution: '', faculty: '', department: '', moduleLeader: '', academicYear: '2026/27',
   teachingPeriod: '', assessmentProfile: '', assessmentFormat: '', assessmentStructure: '', assessmentPurpose: '', expectations: '', criteria: '',
   preparation: '', workedExamples: '', commonPitfalls: '', assessmentRequirements: '', feedbackAvailable: '', usingFeedback: '',
+  learningOutcomes: '', fairnessAndClarity: '', skillsEmployability: '',
+  missingInformation: '',
   supportRoutes: '', cohortContext: '', evaluatedLearning: '', performancePatterns: '', cohortStrengths: '', improvementAreas: '',
   criteriaApplication: '', improvedApproaches: '', futureUse: '', debriefSupport: '', keatsLocation: '',
 };

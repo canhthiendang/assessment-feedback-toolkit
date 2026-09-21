@@ -83,6 +83,31 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
   return { blob: await Packer.toBlob(doc), filename: `${filenamePart(data.moduleCode || data.moduleTitle)}_${stage === 'before' ? 'Assessment_and_Feedback_Guide' : 'General_Feedback'}_${brand === 'kcl' ? 'KCL' : 'Generic'}.docx` };
 }
 
+export async function createSlidesCompanionDocument(data: ToolkitData, brand: DocumentBrand, logo?: ArrayBuffer) {
+  const accent = brand === 'kcl' ? KCL_RED : GENERIC_NAVY;
+  const content = [
+    sectionHeading(1, 'Assessment structure and rationale', accent), labelled('What makes up the assessment', data.assessmentStructure), labelled('Why this design supports learning', data.assessmentPurpose),
+    sectionHeading(2, 'Learning outcomes', accent), labelled('What students will demonstrate', data.learningOutcomes),
+    sectionHeading(3, 'Evaluation and fairness', accent), labelled('How work will be evaluated', data.criteria), labelled('How expectations and fairness are supported', data.fairnessAndClarity),
+    sectionHeading(4, 'Preparation and common pitfalls', accent), labelled('How to prepare', data.preparation), labelled('Common pitfalls', data.commonPitfalls), labelled('Practice and worked examples', data.workedExamples),
+    sectionHeading(5, 'Feedback and improvement', accent), labelled('Feedback opportunities', data.feedbackAvailable), labelled('How to use feedback', data.usingFeedback), labelled('Support routes', data.supportRoutes),
+    sectionHeading(6, 'Skills and employability', accent), labelled('Skills developed through this assessment', data.skillsEmployability),
+  ];
+  const doc = new Document({
+    creator: data.moduleLeader || 'Module team', title: `${data.moduleCode} ${data.moduleTitle} Assessment and Feedback Companion`,
+    description: 'Accessible narrative companion to the Assessment and Feedback Slides pilot',
+    styles: { default: { document: { run: { font: 'Arial', size: 22, color: INK }, paragraph: { spacing: { after: 130, line: 276 } } } } },
+    sections: [{ properties: { page: { margin: { top: 900, right: 900, bottom: 900, left: 900 } } }, footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, children: [new TextRun({ text: 'Editable companion document · ', color: MUTED }), new TextRun({ children: [PageNumber.CURRENT], color: MUTED })] })] }) }, children: [
+      brand === 'kcl' && logo ? new Paragraph({ children: [new ImageRun({ data: new Uint8Array(logo), type: 'png', transformation: { width: 104, height: 80 }, altText: { title: "King's College London logo", description: "King's College London", name: 'KCL logo' } })] }) : new Paragraph({ children: [new TextRun({ text: 'ASSESSMENT & FEEDBACK TOOLKIT', bold: true, color: accent, size: 18, characterSpacing: 45 })] }),
+      new Paragraph({ heading: HeadingLevel.TITLE, spacing: { after: 120 }, children: [new TextRun({ text: 'Assessment and Feedback Companion', color: accent, bold: true, size: 38 })] }),
+      new Paragraph({ spacing: { after: 250 }, children: [new TextRun({ text: [data.moduleCode, data.moduleTitle, data.academicYear].filter(Boolean).join(' · '), bold: true, size: 24 })] }),
+      ...content,
+      new Paragraph({ spacing: { before: 260 }, children: [new TextRun({ text: 'Module leader review required. ', bold: true, color: accent }), new TextRun({ text: 'This companion expands the slide content for accessible reference. Check it against current approved module and assessment information before release.', italics: true, color: MUTED })] }),
+    ] }],
+  });
+  return { blob: await Packer.toBlob(doc), filename: `${filenamePart(data.moduleCode || data.moduleTitle)}_Assessment_and_Feedback_Companion_${brand === 'kcl' ? 'KCL' : 'Generic'}.docx` };
+}
+
 export function triggerDownload(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename;
   document.body.appendChild(anchor); anchor.click(); anchor.remove(); setTimeout(() => URL.revokeObjectURL(url), 1000);
