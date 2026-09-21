@@ -33,11 +33,11 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
   const content = stage === 'before' ? [
     sectionHeading(1, 'Assessment overview', accent), labelled('Assessment structure and weighting', data.assessmentStructure), labelled('Why this assessment is used', data.assessmentPurpose), labelled('Requirements and permitted resources', data.assessmentRequirements),
     sectionHeading(2, 'Expectations and criteria', accent), labelled('What students should demonstrate', data.expectations), labelled('How the criteria will be applied', data.criteria),
-    sectionHeading(3, 'Preparation and readiness', accent), labelled('How to prepare', data.preparation), labelled('Worked examples or practice opportunities', data.workedExamples), labelled('Common pitfalls and how to avoid them', data.commonPitfalls),
+    sectionHeading(3, 'Preparation and readiness', accent), labelled('Learning outcomes addressed', data.learningOutcomes), labelled('How to prepare', data.preparation), labelled('Learning-outcome-linked worked example or practice opportunity', data.workedExamples), labelled('Common pitfalls and how to avoid them', data.commonPitfalls),
     sectionHeading(4, 'Feedback and improvement', accent), labelled('Feedback available', data.feedbackAvailable), labelled('How to use feedback', data.usingFeedback), labelled('Support and debrief routes', data.supportRoutes),
   ] : [
     sectionHeading(1, 'Assessment and cohort context', accent), labelled('Context', data.cohortContext),
-    sectionHeading(2, 'What the assessment evaluated', accent), labelled('Knowledge, skills and judgement', data.evaluatedLearning),
+    sectionHeading(2, 'What the assessment evaluated', accent), labelled('Learning outcomes addressed', data.learningOutcomes), labelled('Knowledge, skills and judgement', data.evaluatedLearning),
     sectionHeading(3, 'Overall performance patterns', accent), labelled('Aggregate, non-identifiable patterns', data.performancePatterns),
     sectionHeading(4, 'What the cohort did well', accent), labelled('Common strengths', data.cohortStrengths),
     sectionHeading(5, 'Common areas for improvement', accent), labelled('Priorities for improvement', data.improvementAreas),
