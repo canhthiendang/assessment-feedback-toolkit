@@ -8,7 +8,24 @@ const MUTED = '536171';
 const BORDER = 'CED6E0';
 function clean(value: string) { return value.trim() || 'Not specified'; }
 function filenamePart(value: string) { return value.trim().replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '_').slice(0, 60) || 'Module'; }
-function labelled(label: string, value: string) { return new Paragraph({ spacing: { after: 140 }, children: [new TextRun({ text: `${label}: `, bold: true, color: INK }), new TextRun({ text: clean(value), color: INK })] }); }
+function richRuns(text: string) {
+  const match = text.match(/^([^:]{2,60}:)\s*(.*)$/);
+  return match ? [new TextRun({ text: `${match[1]} `, bold: true, color: INK }), new TextRun({ text: match[2], color: INK })] : [new TextRun({ text, color: INK })];
+}
+function formatted(label: string, value: string) {
+  const lines = clean(value).split(/\r?\n/); const output: Paragraph[] = [new Paragraph({ spacing: { before: 70, after: 70 }, keepNext: true, children: [new TextRun({ text: label, bold: true, color: INK })] })];
+  let afterBlank = false;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) { afterBlank = true; continue; }
+    const bullet = line.match(/^[•*-]\s+(.+)$/); const numbered = line.match(/^(\d+[.)])\s+(.+)$/);
+    if (bullet) output.push(new Paragraph({ bullet: { level: 0 }, spacing: { before: afterBlank ? 100 : 0, after: 55 }, children: richRuns(bullet[1]) }));
+    else if (numbered) output.push(new Paragraph({ indent: { left: 360, hanging: 280 }, spacing: { before: afterBlank ? 100 : 0, after: 55 }, children: [new TextRun({ text: `${numbered[1]} `, bold: true, color: INK }), ...richRuns(numbered[2])] }));
+    else output.push(new Paragraph({ spacing: { before: afterBlank ? 120 : 0, after: 90 }, children: richRuns(line) }));
+    afterBlank = false;
+  }
+  return output;
+}
 function sectionHeading(number: number, text: string, accent: string) { return new Paragraph({ heading: HeadingLevel.HEADING_2, spacing: { before: 300, after: 120 }, keepNext: true, children: [new TextRun({ text: `${number}. ${text}`, bold: true, color: accent })] }); }
 function metadataRow(label: string, value: string, accent: string, tint: string) {
   return new TableRow({ cantSplit: true, children: [
@@ -33,20 +50,20 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
     ? [new ImageRun({ data: new Uint8Array(logo), type: 'png', transformation: { width: 130, height: 100 }, altText: { title: "King's College London logo", description: "King's College London", name: 'KCL logo' } })]
     : [new TextRun({ text: 'ASSESSMENT & FEEDBACK TOOLKIT', bold: true, color: accent, size: 18, characterSpacing: 45 })];
   const content = stage === 'before' ? [
-    sectionHeading(1, 'Assessment overview', accent), labelled('Assessment structure and weighting', data.assessmentStructure), labelled('Why this assessment is used', data.assessmentPurpose), labelled('Requirements and permitted resources', data.assessmentRequirements),
-    sectionHeading(2, 'Expectations and criteria', accent), labelled('What students should demonstrate', data.expectations), labelled('How the criteria will be applied', data.criteria),
-    sectionHeading(3, 'Preparation and readiness', accent), labelled('Learning outcomes addressed', data.learningOutcomes), labelled('How to prepare', data.preparation), labelled('Learning-outcome-linked worked example or practice opportunity', data.workedExamples), labelled('Common pitfalls and how to avoid them', data.commonPitfalls),
-    sectionHeading(4, 'Feedback and improvement', accent), labelled('Feedback available', data.feedbackAvailable), labelled('How to use feedback', data.usingFeedback), labelled('Support and debrief routes', data.supportRoutes),
+    sectionHeading(1, 'Assessment overview', accent), ...formatted('Assessment structure and weighting', data.assessmentStructure), ...formatted('Why this assessment is used', data.assessmentPurpose), ...formatted('Requirements and permitted resources', data.assessmentRequirements),
+    sectionHeading(2, 'Expectations and criteria', accent), ...formatted('What students should demonstrate', data.expectations), ...formatted('How the criteria will be applied', data.criteria),
+    sectionHeading(3, 'Preparation and readiness', accent), ...formatted('Learning outcomes addressed', data.learningOutcomes), ...formatted('How to prepare', data.preparation), ...formatted('Learning-outcome-linked worked example or practice opportunity', data.workedExamples), ...formatted('Common pitfalls and how to avoid them', data.commonPitfalls),
+    sectionHeading(4, 'Feedback and improvement', accent), ...formatted('Feedback available', data.feedbackAvailable), ...formatted('How to use feedback', data.usingFeedback), ...formatted('Support and debrief routes', data.supportRoutes),
   ] : [
-    sectionHeading(1, 'Assessment and cohort context', accent), labelled('Context', data.cohortContext),
-    sectionHeading(2, 'What the assessment evaluated', accent), labelled('Learning outcomes addressed', data.learningOutcomes), labelled('Knowledge, skills and judgement', data.evaluatedLearning),
-    sectionHeading(3, 'Overall performance patterns', accent), labelled('Aggregate, non-identifiable patterns', data.performancePatterns),
-    sectionHeading(4, 'What the cohort did well', accent), labelled('Common strengths', data.cohortStrengths),
-    sectionHeading(5, 'Common areas for improvement', accent), labelled('Priorities for improvement', data.improvementAreas),
-    sectionHeading(6, 'How the criteria were applied', accent), labelled('Application of the rubric or criteria', data.criteriaApplication),
-    sectionHeading(7, 'Illustrative improved approaches', accent), labelled('Examples of stronger reasoning or execution', data.improvedApproaches),
-    sectionHeading(8, 'Using this feedback in future', accent), labelled('Transfer to later learning or assessment', data.futureUse),
-    sectionHeading(9, 'Further support and debrief', accent), labelled('Support, resources and arrangements', data.debriefSupport),
+    sectionHeading(1, 'Assessment and cohort context', accent), ...formatted('Context', data.cohortContext),
+    sectionHeading(2, 'What the assessment evaluated', accent), ...formatted('Learning outcomes addressed', data.learningOutcomes), ...formatted('Knowledge, skills and judgement', data.evaluatedLearning),
+    sectionHeading(3, 'Overall performance patterns', accent), ...formatted('Aggregate, non-identifiable patterns', data.performancePatterns),
+    sectionHeading(4, 'What the cohort did well', accent), ...formatted('Common strengths', data.cohortStrengths),
+    sectionHeading(5, 'Common areas for improvement', accent), ...formatted('Priorities for improvement', data.improvementAreas),
+    sectionHeading(6, 'How the criteria were applied', accent), ...formatted('Application of the rubric or criteria', data.criteriaApplication),
+    sectionHeading(7, 'Illustrative improved approaches', accent), ...formatted('Examples of stronger reasoning or execution', data.improvedApproaches),
+    sectionHeading(8, 'Using this feedback in future', accent), ...formatted('Transfer to later learning or assessment', data.futureUse),
+    sectionHeading(9, 'Further support and debrief', accent), ...formatted('Support, resources and arrangements', data.debriefSupport),
   ];
   const doc = new Document({
     creator: 'Dr Canh Thien Dang', title: `${data.moduleCode} ${data.moduleTitle} - ${title}`,
@@ -75,7 +92,7 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
           metadataRow('Module', `${data.moduleCode} ${data.moduleTitle}`.trim(), accent, tint), metadataRow('Assessment profile', profileText, accent, tint), metadataRow('Assessment format', formatText, accent, tint),
           metadataRow('Level and period', [data.level, data.teachingPeriod, data.academicYear].filter(Boolean).join(' | '), accent, tint), metadataRow('Module leader', data.moduleLeader, accent, tint), metadataRow('Department / faculty', [data.department, data.faculty].filter(Boolean).join(' | '), accent, tint),
         ] }), ...content,
-        sectionHeading(stage === 'before' ? 5 : 10, 'Where to find materials', accent), labelled('KEATS or programme-page location', data.keatsLocation),
+        sectionHeading(stage === 'before' ? 5 : 10, 'Where to find materials', accent), ...formatted('KEATS or programme-page location', data.keatsLocation),
         new Paragraph({ spacing: { before: 280 }, border: { top: { style: BorderStyle.SINGLE, size: 8, color: accent } }, children: [
           new TextRun({ text: stage === 'after' ? 'This cohort-level summary complements individual feedback. ' : '', bold: true, color: accent }),
           new TextRun({ text: 'This editable document should be checked by the module leader against current module and institutional requirements before publication.', color: MUTED, italics: true }),
@@ -88,12 +105,12 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
 export async function createSlidesCompanionDocument(data: ToolkitData, brand: DocumentBrand, logo?: ArrayBuffer) {
   const accent = brand === 'kcl' ? KCL_RED : GENERIC_NAVY;
   const content = [
-    sectionHeading(1, 'Assessment structure and rationale', accent), labelled('What makes up the assessment', data.assessmentStructure), labelled('Why this design supports learning', data.assessmentPurpose),
-    sectionHeading(2, 'Learning outcomes', accent), labelled('What students will demonstrate', data.learningOutcomes),
-    sectionHeading(3, 'Evaluation and fairness', accent), labelled('How work will be evaluated', data.criteria), labelled('How expectations and fairness are supported', data.fairnessAndClarity),
-    sectionHeading(4, 'Preparation and common pitfalls', accent), labelled('How to prepare', data.preparation), labelled('Common pitfalls', data.commonPitfalls), labelled('Practice and worked examples', data.workedExamples),
-    sectionHeading(5, 'Feedback and improvement', accent), labelled('Feedback opportunities', data.feedbackAvailable), labelled('How to use feedback', data.usingFeedback), labelled('Support routes', data.supportRoutes),
-    sectionHeading(6, 'Skills and employability', accent), labelled('Skills developed through this assessment', data.skillsEmployability),
+    sectionHeading(1, 'Assessment structure and rationale', accent), ...formatted('What makes up the assessment', data.assessmentStructure), ...formatted('Why this design supports learning', data.assessmentPurpose),
+    sectionHeading(2, 'Learning outcomes', accent), ...formatted('What students will demonstrate', data.learningOutcomes),
+    sectionHeading(3, 'Evaluation and fairness', accent), ...formatted('How work will be evaluated', data.criteria), ...formatted('How expectations and fairness are supported', data.fairnessAndClarity),
+    sectionHeading(4, 'Preparation and common pitfalls', accent), ...formatted('How to prepare', data.preparation), ...formatted('Common pitfalls', data.commonPitfalls), ...formatted('Practice and worked examples', data.workedExamples),
+    sectionHeading(5, 'Feedback and improvement', accent), ...formatted('Feedback opportunities', data.feedbackAvailable), ...formatted('How to use feedback', data.usingFeedback), ...formatted('Support routes', data.supportRoutes),
+    sectionHeading(6, 'Skills and employability', accent), ...formatted('Skills developed through this assessment', data.skillsEmployability),
   ];
   const doc = new Document({
     creator: data.moduleLeader || 'Module team', title: `${data.moduleCode} ${data.moduleTitle} Assessment and Feedback Companion`,

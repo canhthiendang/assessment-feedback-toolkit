@@ -12,7 +12,13 @@ function filenamePart(value: string) {
 }
 
 function paragraphs(value: string, limit = 4) {
-  return value.split(/\n+/).map(line => line.replace(/^[-•*]\s*/, '').trim()).filter(Boolean).slice(0, limit);
+  let afterBlank = false; const items: { text: string; bullet: boolean; numbered: boolean; afterBlank: boolean }[] = [];
+  for (const raw of value.split(/\r?\n/)) {
+    const line = raw.trim(); if (!line) { afterBlank = true; continue; }
+    const bullet = line.match(/^[•*-]\s+(.+)$/); const numbered = line.match(/^\d+[.)]\s+(.+)$/);
+    items.push({ text: bullet?.[1] || line, bullet: Boolean(bullet), numbered: Boolean(numbered), afterBlank }); afterBlank = false;
+  }
+  return items.slice(0, limit);
 }
 
 function addTitle(slide: pptxgen.Slide, first: string, second?: string) {
@@ -26,7 +32,7 @@ function addHeading(slide: pptxgen.Slide, text: string, x: number, y: number, w:
 
 function addBody(slide: pptxgen.Slide, text: string, x: number, y: number, w: number, h: number, bullet = false, maxItems = 5) {
   const items = paragraphs(text, bullet ? maxItems : 8);
-  const runs = items.length ? items.map((line, index) => ({ text: line, options: { bullet: bullet ? { indent: 16 } : undefined, breakLine: index < items.length - 1 } })) : [{ text: '[Module-specific information required]', options: { italic: true, color: MUTED } }];
+  const runs = items.length ? items.map((item, index) => ({ text: item.text, options: { bullet: (bullet || item.bullet) && !item.numbered ? { indent: 16 } : undefined, breakLine: index < items.length - 1, paraSpaceBeforePt: item.afterBlank ? 8 : 0 } })) : [{ text: '[Module-specific information required]', options: { italic: true, color: MUTED } }];
   slide.addText(runs, { x, y, w, h, fontFace: 'Georgia', fontSize: 15, color: BLACK, margin: 0.04, breakLine: false, valign: 'top', fit: 'shrink', paraSpaceAfter: 6 });
 }
 
