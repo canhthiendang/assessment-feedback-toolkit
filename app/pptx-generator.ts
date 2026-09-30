@@ -13,7 +13,8 @@ function filenamePart(value: string) {
 
 function paragraphs(value: string, limit = 4) {
   let afterBlank = false; const items: { text: string; bullet: boolean; numbered: boolean; afterBlank: boolean }[] = [];
-  for (const raw of value.split(/\r?\n/)) {
+  const normalized = value.replace(/\\n/g, '\n');
+  for (const raw of normalized.split(/\r?\n/)) {
     const line = raw.trim(); if (!line) { afterBlank = true; continue; }
     const bullet = line.match(/^[•*-]\s+(.+)$/); const numbered = line.match(/^\d+[.)]\s+(.+)$/);
     items.push({ text: bullet?.[1] || line, bullet: Boolean(bullet), numbered: Boolean(numbered), afterBlank }); afterBlank = false;

@@ -12,8 +12,26 @@ function richRuns(text: string) {
   const match = text.match(/^([^:]{2,60}:)\s*(.*)$/);
   return match ? [new TextRun({ text: `${match[1]} `, bold: true, color: INK }), new TextRun({ text: match[2], color: INK })] : [new TextRun({ text, color: INK })];
 }
+function structuredLines(value: string) {
+  const normalized = clean(value).replace(/\\n/g, '\n');
+  if (normalized.includes('\n')) return normalized.split(/\r?\n/);
+  const list = normalized.match(/^(.{8,180}\b(?:include|includes|following)\b[^:]*:)\s*(.+)$/i);
+  if (list) {
+    const items = list[2].split(/;\s+/).map(item => item.trim()).filter(Boolean);
+    if (items.length >= 3) return [list[1], '', ...items.map(item => `• ${item.replace(/^and\s+/i, '')}`)];
+  }
+  if (normalized.length < 420) return [normalized];
+  const sentences = normalized.match(/[^.!?]+(?:[.!?]+|$)/g)?.map(sentence => sentence.trim()).filter(Boolean) || [normalized];
+  const paragraphs: string[] = []; let current = '';
+  for (const sentence of sentences) {
+    if (current && `${current} ${sentence}`.length > 380) { paragraphs.push(current); current = sentence; }
+    else current = current ? `${current} ${sentence}` : sentence;
+  }
+  if (current) paragraphs.push(current);
+  return paragraphs.flatMap((paragraph, index) => index ? ['', paragraph] : [paragraph]);
+}
 function formatted(label: string, value: string) {
-  const lines = clean(value).split(/\r?\n/); const output: Paragraph[] = [new Paragraph({ spacing: { before: 70, after: 70 }, keepNext: true, children: [new TextRun({ text: label, bold: true, color: INK })] })];
+  const lines = structuredLines(value); const output: Paragraph[] = [new Paragraph({ spacing: { before: 70, after: 70 }, keepNext: true, children: [new TextRun({ text: label, bold: true, color: INK })] })];
   let afterBlank = false;
   for (const raw of lines) {
     const line = raw.trim();

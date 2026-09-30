@@ -194,7 +194,7 @@ export default function Home() {
     window.location.href = createSpoEmail(data, handover, spoEmail, ccEmail).href;
   }
 
-  return <main data-toolkit-version="2026.09.30.2">
+  return <main data-toolkit-version="2026.09.30.3">
     <a className="skip-link" href="#main-content">Skip to main content</a>
     <header className="topbar"><div className="brand-mark" aria-hidden="true">A</div><div><p className="brand-line">Assessment and Feedback Toolkit</p><p className="brand-subline">Editable starting points for university educators</p></div>{FEEDBACK_FORM_URL && <a href="#feedback" className="top-link">Share feedback</a>}<a href="#about" className="top-link">About &amp; privacy</a></header>
     <div id="main-content">
