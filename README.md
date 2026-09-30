@@ -10,7 +10,7 @@ Public-source GitHub Pages edition:
 - Repository: <https://github.com/canhthiendang/assessment-feedback-toolkit>
 - Website: <https://canhthiendang.github.io/assessment-feedback-toolkit/>
 
-The GitHub Pages edition is deliberately static and local-only. It retains the manual and ChatGPT-assisted routes, browser draft storage, JSON import, editable Word generation, optional KCL document branding and SPO email preparation. It does not include the usage-reporting API, database or private owner dashboard. Form entries and generated documents are processed in the user's browser.
+The GitHub Pages edition is deliberately static and local-only. It retains the manual and GenAI-assisted routes, browser draft storage, JSON import, editable Word generation, optional KCL document branding and SPO email preparation. It does not include the usage-reporting API, database or private owner dashboard. Form entries and generated documents are processed in the user's browser.
 
 GitHub Pages is served from the committed `docs` folder on the `main` branch.
 
@@ -24,9 +24,9 @@ The source is publicly visible for transparency. No open-source licence has yet 
 
 ## Main workflows
 
-- Manual and ChatGPT-assisted routes for both documents.
-- The ChatGPT route asks colleagues to use approved syllabus, course aims or learning outcomes, assessment brief, marking guide and rubric sources, with clear safeguards for restricted and identifiable material.
-- Each ChatGPT route includes a fictional JSON example that can be copied or loaded into the response box to demonstrate automatic field completion.
+- Manual and tool-neutral GenAI-assisted routes for both documents.
+- The GenAI route asks colleagues to use approved syllabus, course aims or learning outcomes, assessment brief, marking guide and rubric sources, with clear safeguards for restricted and identifiable material.
+- Each GenAI route includes a fictional JSON example that can be copied or loaded into the response box to demonstrate automatic field completion.
 - AI prompts request pedagogically differentiated illustrative answer tiers, aligned to supplied criteria and framed as feedback for learning rather than official model answers.
 - Examination-heavy, mixed-assessment and coursework-only module profiles.
 - Format-aware examples for examinations, essays/reports, problem sets, data projects, cases, presentations, group projects and take-home work.
@@ -39,7 +39,7 @@ The source is publicly visible for transparency. No open-source licence has yet 
 For the public GitHub Pages version:
 
 - Form content, documents and local drafts remain in the user's browser/computer.
-- The site never receives a syllabus or ChatGPT credentials. In the AI route, the user works directly in their own ChatGPT account.
+- The site never receives a syllabus or GenAI credentials. In the GenAI route, the user works directly with the external service they choose.
 - Users are instructed not to enter identifiable student data, individual scripts, raw marks, named comments or identifiable student work.
 - Usage reporting, database storage and the private owner dashboard are not included in the static GitHub Pages build.
 
