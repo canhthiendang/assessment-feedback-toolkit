@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getUsageDb } from '../../../db';
 const allowed = {
-  stage: new Set(['before','after']), workflow: new Set(['manual','ai']), assessmentProfile: new Set(['exam','mixed','coursework']),
+  stage: new Set(['before','after']), workflow: new Set(['manual','ai']), assessmentProfile: new Set(['exam','mixed','coursework','custom']),
   outputType: new Set(['guide','slides_pilot','general_feedback']),
-  assessmentFormat: new Set(['in_person_exam','open_book_exam','essay_report','quant_problem_set','econometrics_project','case_analysis','presentation','group_project','take_home']),
+  assessmentFormat: new Set(['in_person_exam','open_book_exam','essay_report','quant_problem_set','econometrics_project','case_analysis','presentation','group_project','take_home','custom']),
 };
 function text(value: unknown, max = 120) { return typeof value === 'string' ? value.trim().slice(0,max) : ''; }
 export async function POST(request: Request) {

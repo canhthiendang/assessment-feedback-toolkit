@@ -2,15 +2,15 @@ export type DocumentStage = 'before' | 'after';
 export type WorkflowMode = 'manual' | 'ai';
 export type BeforeProduct = 'guide' | 'slides';
 export type DocumentBrand = 'generic' | 'kcl';
-export type AssessmentProfile = 'exam' | 'mixed' | 'coursework';
+export type AssessmentProfile = 'exam' | 'mixed' | 'coursework' | 'custom';
 
 export type AssessmentFormat =
   | 'in_person_exam' | 'open_book_exam' | 'essay_report' | 'quant_problem_set'
-  | 'econometrics_project' | 'case_analysis' | 'presentation' | 'group_project' | 'take_home';
+  | 'econometrics_project' | 'case_analysis' | 'presentation' | 'group_project' | 'take_home' | 'custom';
 
 export type ToolkitData = {
   moduleCode: string; moduleTitle: string; level: string; institution: string; faculty: string; department: string;
-  moduleLeader: string; academicYear: string; teachingPeriod: string; assessmentProfile: AssessmentProfile | ''; assessmentFormat: AssessmentFormat | '';
+  moduleLeader: string; academicYear: string; teachingPeriod: string; assessmentProfile: AssessmentProfile | ''; customAssessmentProfile: string; assessmentFormat: AssessmentFormat | ''; customAssessmentFormat: string;
   assessmentStructure: string; assessmentPurpose: string; expectations: string; criteria: string;
   preparation: string; workedExamples: string; commonPitfalls: string; assessmentRequirements: string;
   feedbackAvailable: string; usingFeedback: string; supportRoutes: string; cohortContext: string;
@@ -28,14 +28,16 @@ export const formatLabels: Record<AssessmentFormat, string> = {
   essay_report: 'Coursework essay or report', quant_problem_set: 'Quantitative problem set',
   econometrics_project: 'Economics, statistics or econometrics data project', case_analysis: 'Case analysis',
   presentation: 'Individual or group presentation', group_project: 'Group project', take_home: 'Take-home assessment',
+  custom: 'Other or combined assessment format',
 };
 export const profileLabels: Record<AssessmentProfile, string> = {
   exam: 'Examination-heavy module', mixed: 'Mixed-assessment module', coursework: 'Coursework-only module',
+  custom: 'Other or custom assessment profile',
 };
 
 export const emptyData: ToolkitData = {
   moduleCode: '', moduleTitle: '', level: '', institution: '', faculty: '', department: '', moduleLeader: '', academicYear: '2026/27',
-  teachingPeriod: '', assessmentProfile: '', assessmentFormat: '', assessmentStructure: '', assessmentPurpose: '', expectations: '', criteria: '',
+  teachingPeriod: '', assessmentProfile: '', customAssessmentProfile: '', assessmentFormat: '', customAssessmentFormat: '', assessmentStructure: '', assessmentPurpose: '', expectations: '', criteria: '',
   preparation: '', workedExamples: '', commonPitfalls: '', assessmentRequirements: '', feedbackAvailable: '', usingFeedback: '',
   learningOutcomes: '', fairnessAndClarity: '', skillsEmployability: '',
   missingInformation: '',

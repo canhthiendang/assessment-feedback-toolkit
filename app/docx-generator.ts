@@ -22,6 +22,8 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
   const tint = brand === 'kcl' ? 'F8E9EC' : 'EAF0F7';
   const title = stage === 'before' ? 'Assessment and Feedback Guide' : 'General Feedback';
   const subtitle = stage === 'before' ? 'Expectations, preparation and feedback routes' : 'Cohort-level themes and practical next steps';
+  const profileText = data.assessmentProfile === 'custom' ? data.customAssessmentProfile : data.assessmentProfile ? profileLabels[data.assessmentProfile] : '';
+  const formatText = data.assessmentFormat === 'custom' ? data.customAssessmentFormat : data.assessmentFormat ? formatLabels[data.assessmentFormat] : '';
   const tableBorders = {
     top: { style: BorderStyle.SINGLE, size: 4, color: BORDER }, bottom: { style: BorderStyle.SINGLE, size: 4, color: BORDER },
     left: { style: BorderStyle.SINGLE, size: 4, color: BORDER }, right: { style: BorderStyle.SINGLE, size: 4, color: BORDER },
@@ -70,7 +72,7 @@ export async function createToolkitDocument(data: ToolkitData, stage: DocumentSt
         new Paragraph({ spacing: { after: 220 }, children: [new TextRun({ text: subtitle, color: MUTED, size: 22 })] }),
         new Table({ width: { size: 9360, type: WidthType.DXA }, columnWidths: [2700, 6660], layout: TableLayoutType.FIXED, borders: tableBorders, rows: [
           new TableRow({ tableHeader: true, cantSplit: true, children: [new TableCell({ columnSpan: 2, shading: { type: ShadingType.CLEAR, fill: accent }, margins: { top: 90, bottom: 90, left: 120, right: 120 }, children: [new Paragraph({ children: [new TextRun({ text: 'Module information', bold: true, color: 'FFFFFF' })] })] })] }),
-          metadataRow('Module', `${data.moduleCode} ${data.moduleTitle}`.trim(), accent, tint), metadataRow('Assessment profile', data.assessmentProfile ? profileLabels[data.assessmentProfile] : '', accent, tint), metadataRow('Assessment format', data.assessmentFormat ? formatLabels[data.assessmentFormat] : '', accent, tint),
+          metadataRow('Module', `${data.moduleCode} ${data.moduleTitle}`.trim(), accent, tint), metadataRow('Assessment profile', profileText, accent, tint), metadataRow('Assessment format', formatText, accent, tint),
           metadataRow('Level and period', [data.level, data.teachingPeriod, data.academicYear].filter(Boolean).join(' | '), accent, tint), metadataRow('Module leader', data.moduleLeader, accent, tint), metadataRow('Department / faculty', [data.department, data.faculty].filter(Boolean).join(' | '), accent, tint),
         ] }), ...content,
         sectionHeading(stage === 'before' ? 5 : 10, 'Where to find materials', accent), labelled('KEATS or programme-page location', data.keatsLocation),
